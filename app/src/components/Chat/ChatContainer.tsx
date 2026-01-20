@@ -13,6 +13,7 @@ import {
 import { parseDateString, isParseError, validateEmail, validateName, tryParseAsCorrection } from '@/lib/dateParser';
 import { getMysticalValidationMessages } from '@/lib/mysticalValidation';
 import { useDynamicSuggestions } from '@/hooks/useDynamicSuggestions';
+import { useAIInterpretation, getAIAcknowledgment, getAITransition } from '@/hooks/useAIInterpretation';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
@@ -79,6 +80,9 @@ export default function ChatContainer() {
     isLoading: suggestionsLoading,
     generateSuggestions,
   } = useDynamicSuggestions();
+
+  // AI interpretation hook
+  const { getInterpretation } = useAIInterpretation();
 
   // Get the addOracleMessageWithDuration from store
   const addOracleMessageWithDuration = useConversationStore(
@@ -302,10 +306,21 @@ export default function ChatContainer() {
         setConstellationNumber(lifePath);
         setShowConstellationOverlay(true);
 
-        await speakOracleMessages([
-          `Life Path ${lifePath}.`,
-          `${interp.name}.`,
-        ]);
+        // Get AI-personalized interpretation
+        const aiResult = lifePath ? await getInterpretation('lifePath', lifePath, {
+          userName: useConversationStore.getState().userProfile.fullName || undefined,
+          lifePath,
+        }) : null;
+
+        const interpretation = aiResult?.interpretation || {
+          title: `Life Path ${lifePath}. ${interp.name}.`,
+          shortDescription: interp.shortDescription,
+          coreDescription: interp.coreDescription,
+        };
+
+        // Split title into two messages for dramatic effect
+        const titleParts = interpretation.title.split('. ').filter(Boolean);
+        await speakOracleMessages(titleParts.map(p => p.endsWith('.') ? p : `${p}.`));
 
         // Keep constellation visible while Oracle explains
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -313,8 +328,8 @@ export default function ChatContainer() {
         setPhase('revealing_life_path');
 
         await speakOracleMessages([
-          interp.shortDescription,
-          interp.coreDescription,
+          interpretation.shortDescription,
+          interpretation.coreDescription,
         ]);
 
         // Fade out constellation after explanation
@@ -322,14 +337,24 @@ export default function ChatContainer() {
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
-        // First Oracle question
-        await speakOracleMessages([
-          "Does this resonate with you?",
-          "What aspect of your life feels most affected by this energy?",
-        ]);
+        // First Oracle question - personalized based on life path
+        const question1 = await getAITransition(
+          'revealing_life_path',
+          'oracle_question_1',
+          {
+            userName: userProfile.fullName,
+            lifePath,
+          },
+          [
+            "Does this resonate with you?",
+            "What aspect of your life feels most affected by this energy?",
+          ]
+        );
+
+        await speakOracleMessages(question1);
 
         setPhase('oracle_question_1');
-        generateSuggestions("What aspect of your life feels most affected by this energy?");
+        generateSuggestions(question1[question1.length - 1] || "What aspect of your life feels most affected by this energy?");
       } else {
         console.error('[ChatContainer] No interpretation found for life path:', lifePath);
         setShowCalculation(false);
@@ -358,19 +383,35 @@ export default function ChatContainer() {
     else if (phase === 'oracle_question_1') {
       addMessage({ type: 'user', content: trimmedValue });
 
-      // Acknowledge their response warmly
-      await speakOracleMessages([
-        "I see the truth in your words...",
-        "Your awareness is already shifting.",
-      ]);
+      // Get AI-personalized acknowledgment based on what they said
+      const acknowledgment = await getAIAcknowledgment(
+        trimmedValue,
+        {
+          userName: userProfile.fullName,
+          lifePath: userProfile.lifePath,
+        },
+        phase
+      );
+      await speakOracleMessages(acknowledgment);
 
       await new Promise((resolve) => setTimeout(resolve, 800));
 
-      await speakOracleMessages([
-        "But this is only your surface number.",
-        "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
-        "What is your full birth name?",
-      ]);
+      // AI-personalized transition to name collection
+      const transitionMessages = await getAITransition(
+        'oracle_question_1',
+        'collecting_name',
+        {
+          userName: userProfile.fullName,
+          lifePath: userProfile.lifePath,
+        },
+        [
+          "But this is only your surface number.",
+          "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
+          "What is your full birth name?",
+        ]
+      );
+
+      await speakOracleMessages(transitionMessages);
 
       setPhase('collecting_name');
       // No suggestions for name input
@@ -419,13 +460,24 @@ export default function ChatContainer() {
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Second Oracle question
-      await speakOracleMessages([
-        "Have you ever felt drawn to certain skills or abilities that seem to come naturally?",
-      ]);
+      // Second Oracle question - personalized based on expression number
+      const question2 = await getAITransition(
+        'revealing_expression',
+        'oracle_question_2',
+        {
+          userName: profile.fullName,
+          lifePath: profile.lifePath,
+          expression: profile.expression,
+        },
+        [
+          "Have you ever felt drawn to certain skills or abilities that seem to come naturally?",
+        ]
+      );
+
+      await speakOracleMessages(question2);
 
       setPhase('oracle_question_2');
-      generateSuggestions("Have you ever felt drawn to certain skills or abilities?");
+      generateSuggestions(question2[question2.length - 1] || "Have you ever felt drawn to certain skills or abilities?");
     }
 
     // ----------------------------------------
@@ -436,9 +488,17 @@ export default function ChatContainer() {
 
       const profile = useConversationStore.getState().userProfile;
 
-      await speakOracleMessages([
-        "Your intuition serves you well...",
-      ]);
+      // Get AI-personalized acknowledgment
+      const acknowledgment = await getAIAcknowledgment(
+        trimmedValue,
+        {
+          userName: profile.fullName,
+          lifePath: profile.lifePath,
+          expression: profile.expression,
+        },
+        phase
+      );
+      await speakOracleMessages(acknowledgment.slice(0, 1)); // Just one line here
 
       await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -491,14 +551,22 @@ export default function ChatContainer() {
       addMessage({ type: 'user', content: trimmedValue });
 
       // Check if they want to skip
-      if (trimmedValue.toLowerCase().includes('skip')) {
+      if (trimmedValue.toLowerCase().includes('skip') || trimmedValue.toLowerCase().includes('myself')) {
         await handleSkipRelationship();
         return;
       }
 
-      // They're interested in exploring someone
+      // AI-personalized acknowledgment of who they're thinking about
+      const acknowledgment = await getAIAcknowledgment(
+        trimmedValue,
+        {
+          userName: userProfile.fullName,
+          lifePath: userProfile.lifePath,
+        },
+        phase
+      );
       await speakOracleMessages([
-        "I sense a strong connection forming in your mind...",
+        acknowledgment[0] || "I sense a strong connection forming in your mind...",
         "Tell me their name.",
       ]);
 
@@ -544,8 +612,18 @@ export default function ChatContainer() {
 
       const otherName = useConversationStore.getState().otherPerson?.name || 'them';
 
+      // AI-personalized acknowledgment of their relationship description
+      const acknowledgment = await getAIAcknowledgment(
+        trimmedValue,
+        {
+          userName: userProfile.fullName,
+          lifePath: userProfile.lifePath,
+        },
+        phase
+      );
+
       await speakOracleMessages([
-        "I feel the weight of this connection...",
+        acknowledgment[0] || "I feel the weight of this connection...",
         `Do you know when ${otherName} was born? This will unlock the compatibility between you.`,
       ]);
 
@@ -591,15 +669,23 @@ export default function ChatContainer() {
       const userName = state.userProfile.fullName?.split(' ')[0] || 'you';
 
       if (otherLifePath && compat) {
-        await speakOracleMessages([
-          `I've seen your numbers alongside ${otherName}'s now.`,
-        ]);
+        // AI-personalized compatibility reveal
+        const compatIntro = await getAITransition(
+          'collecting_other_dob',
+          'revealing_compatibility',
+          {
+            userName: userName,
+            lifePath: state.userProfile.lifePath,
+          },
+          [
+            `I've seen your numbers alongside ${otherName}'s now.`,
+            `${userName}, I need you to understand something...`,
+          ]
+        );
 
+        await speakOracleMessages([compatIntro[0]]);
         await new Promise((resolve) => setTimeout(resolve, 1200));
-
-        await speakOracleMessages([
-          `${userName}, I need you to understand something...`,
-        ]);
+        await speakOracleMessages([compatIntro[1] || `${userName}, I need you to understand something...`]);
 
         // Show compatibility visualization
         setActiveVisualization('compatibility');
@@ -609,14 +695,26 @@ export default function ChatContainer() {
         playSound('chime');
         setPhase('revealing_compatibility');
 
-        await speakOracleMessages([
-          `Your compatibility score is ${compat.score}%.`,
-          compat.score >= 70
-            ? "There's real potential here."
-            : compat.score >= 50
-            ? "It's not simple, but there's depth."
-            : "Challenging, but not impossible.",
-        ]);
+        // AI-personalized compatibility explanation
+        const compatLevel = compat.score >= 70 ? 'high' : compat.score >= 50 ? 'moderate' : 'challenging';
+        const compatExplanation = await getAITransition(
+          'compatibility_reveal',
+          'compatibility_explanation',
+          {
+            userName: userName,
+            lifePath: state.userProfile.lifePath,
+          },
+          [
+            `Your compatibility score is ${compat.score}%.`,
+            compatLevel === 'high'
+              ? "There's profound potential here. Your energies complement each other in ways that could sustain you both."
+              : compatLevel === 'moderate'
+              ? "The connection runs deeper than the surface suggests. There's work to be done, but the foundation is solid."
+              : "This path requires awareness. The friction between your numbers can become either your greatest challenge or your catalyst for growth.",
+          ]
+        );
+
+        await speakOracleMessages(compatExplanation);
 
         setActiveVisualization(null);
 
@@ -678,8 +776,20 @@ export default function ChatContainer() {
     else if (phase === 'oracle_final_question') {
       addMessage({ type: 'user', content: trimmedValue });
 
+      // AI-personalized acknowledgment of their burning question
+      const acknowledgment = await getAIAcknowledgment(
+        trimmedValue,
+        {
+          userName: userProfile.fullName,
+          lifePath: userProfile.lifePath,
+          expression: userProfile.expression,
+          soulUrge: userProfile.soulUrge,
+        },
+        phase
+      );
+
       await speakOracleMessages([
-        "The stars have heard your question...",
+        acknowledgment[0] || "The stars have heard your question...",
         "The answer lies within your complete reading.",
       ]);
 
