@@ -1101,6 +1101,7 @@ export default function ChatContainer() {
                 alignment={message.id === currentSpeakingMessageId ? currentAlignment : null}
                 audioCurrentTime={audioCurrentTime}
                 isAudioPlaying={isVoicePlaying && message.id === currentSpeakingMessageId}
+                isSpeaking={message.id === currentSpeakingMessageId}
               />
             ))}
           </AnimatePresence>

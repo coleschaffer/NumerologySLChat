@@ -32,6 +32,10 @@ interface MessageBubbleProps {
    * Whether audio is currently playing
    */
   isAudioPlaying?: boolean;
+  /**
+   * Whether this message is currently being spoken (for streaming mode)
+   */
+  isSpeaking?: boolean;
 }
 
 export default function MessageBubble({
@@ -42,6 +46,7 @@ export default function MessageBubble({
   alignment,
   audioCurrentTime,
   isAudioPlaying,
+  isSpeaking,
 }: MessageBubbleProps) {
   const isOracle = message.type === 'oracle';
   const isUser = message.type === 'user';
@@ -51,8 +56,8 @@ export default function MessageBubble({
   // Track if this message's animation has completed
   const [hasAnimated, setHasAnimated] = useState(false);
 
-  // Only animate if this is the latest Oracle message and hasn't animated yet
-  const shouldAnimate = isOracle && isLatest && !hasAnimated && typingDuration;
+  // Animate if: Oracle + latest + not yet animated + (has duration OR is being spoken for streaming)
+  const shouldAnimate = isOracle && isLatest && !hasAnimated && (typingDuration || isSpeaking);
 
   // Mark as animated when component unmounts or when no longer latest
   useEffect(() => {
