@@ -55,10 +55,15 @@ export default function ChatContainer() {
   const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
   const { play: playSound, initialize: initializeAudio } = useSoundEffects();
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages and phase changes
+  // Phase changes can show/hide input which affects layout
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+    // Small delay to allow DOM to update after phase change
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [messages, isTyping, phase]);
 
   // ============================================
   // PHASE 1: THE OPENING
@@ -538,8 +543,8 @@ export default function ChatContainer() {
   return (
     <div className="flex flex-col h-full">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto chat-scroll py-4">
-        <div className="max-w-2xl mx-auto">
+      <div className="flex-1 overflow-y-auto chat-scroll pt-4 pb-8">
+        <div className="max-w-2xl mx-auto px-4">
           <AnimatePresence mode="popLayout">
             {messages.map((message) => (
               <MessageBubble
@@ -561,6 +566,8 @@ export default function ChatContainer() {
             />
           )}
 
+          {/* Spacer to ensure last message is visible above input area */}
+          <div className="h-4" />
           <div ref={messagesEndRef} />
         </div>
       </div>
