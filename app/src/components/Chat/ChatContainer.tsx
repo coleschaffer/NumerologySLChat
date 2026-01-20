@@ -3,12 +3,16 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useConversationStore } from '@/store/conversationStore';
+import type { ConversationPhase } from '@/lib/phaseConfig';
+import { getPhaseConfig, getValidationType } from '@/lib/phaseConfig';
 import { getLifePathInterpretation } from '@/lib/interpretations';
 import {
   calculateCriticalDates,
   calculateCompatibilityCriticalDates,
 } from '@/lib/numerology';
-import { parseDateString, isParseError } from '@/lib/dateParser';
+import { parseDateString, isParseError, validateEmail, validateName } from '@/lib/dateParser';
+import { getMysticalValidationMessages } from '@/lib/mysticalValidation';
+import { useDynamicSuggestions } from '@/hooks/useDynamicSuggestions';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
@@ -17,6 +21,10 @@ import PaywallModal from '../Payment/PaywallModal';
 import CalculationAnimation, {
   generateLifePathSteps,
 } from './CalculationAnimation';
+import ConstellationReveal from '../Numerology/ConstellationReveal';
+import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
+import LetterTransform from '../Numerology/LetterTransform';
+import CompatibilityVisual from '../Numerology/CompatibilityVisual';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useVoiceover } from '@/hooks/useVoiceover';
 
@@ -29,6 +37,7 @@ import { useVoiceover } from '@/hooks/useVoiceover';
  * 3. Personalization using user's actual numbers/name throughout
  * 4. Open loops and intrigue to maintain engagement
  * 5. Strategic pauses and pacing
+ * 6. Mystical error handling - never technical messages
  */
 export default function ChatContainer() {
   const {
@@ -39,6 +48,7 @@ export default function ChatContainer() {
     compatibility,
     isTyping,
     hasPaid,
+    dynamicSuggestions,
     addMessage,
     addOracleMessages,
     setPhase,
@@ -48,14 +58,24 @@ export default function ChatContainer() {
     setOtherPerson,
     setOtherPersonDOB,
     calculateCompatibilityScore,
+    setDynamicSuggestions,
+    clearDynamicSuggestions,
   } = useConversationStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
   const [showCalculation, setShowCalculation] = useState(false);
   const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
-  const { play: playSound, initialize: initializeAudio } = useSoundEffects();
-  const { speak, state: voiceState, toggleMute } = useVoiceover();
+  const [activeVisualization, setActiveVisualization] = useState<'constellation' | 'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
+  const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
+  const { speak, state: voiceState, toggleMute: toggleVoiceMute } = useVoiceover();
+
+  // Dynamic suggestions hook
+  const {
+    suggestions: aiSuggestions,
+    isLoading: suggestionsLoading,
+    generateSuggestions,
+  } = useDynamicSuggestions();
 
   // Get the addOracleMessageWithDuration from store
   const addOracleMessageWithDuration = useConversationStore(
@@ -65,37 +85,23 @@ export default function ChatContainer() {
 
   /**
    * Speak oracle messages with voiceover and typing animation
-   * This replaces addOracleMessages for the immersive experience
    */
   const speakOracleMessages = useCallback(
     async (contents: string[]) => {
       for (let i = 0; i < contents.length; i++) {
         const text = contents[i];
 
-        // Show typing indicator briefly
         setTyping(true);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        const audioDuration = await speak(text);
         setTyping(false);
 
-        // Generate speech and get duration
-        // speak() returns duration in ms
-        const durationPromise = speak(text);
+        const estimatedTypingDuration = text.length * 60;
+        const typingDuration = Math.max(audioDuration, estimatedTypingDuration);
 
-        // Add message with typing duration
-        // Use estimated duration: ~60ms per character for slower, immersive feel
-        const estimatedDuration = text.length * 60;
-        addOracleMessageWithDuration(text, estimatedDuration);
+        addOracleMessageWithDuration(text, typingDuration);
 
-        // Wait for speech to complete (or estimated duration if muted)
-        const actualDuration = await durationPromise;
+        await new Promise((resolve) => setTimeout(resolve, typingDuration));
 
-        // Wait for whichever is longer: speech or typing animation
-        const remainingTime = Math.max(0, estimatedDuration - actualDuration);
-        if (remainingTime > 0) {
-          await new Promise((resolve) => setTimeout(resolve, remainingTime));
-        }
-
-        // Small pause between messages
         if (i < contents.length - 1) {
           await new Promise((resolve) => setTimeout(resolve, 400));
         }
@@ -104,10 +110,28 @@ export default function ChatContainer() {
     [speak, addOracleMessageWithDuration, setTyping]
   );
 
+  /**
+   * Handle mystical validation errors
+   * Instead of technical error messages, use Oracle API to generate contextual redirects
+   */
+  const handleValidationError = useCallback(
+    async (errorCode: string, originalInput: string, expectedInput: 'date' | 'name' | 'email' | 'freeform') => {
+      const messages = await getMysticalValidationMessages({
+        phase,
+        errorCode: errorCode as any,
+        originalInput,
+        userName: userProfile.fullName || undefined,
+        lifePath: userProfile.lifePath || undefined,
+        expectedInput,
+      });
+
+      await speakOracleMessages(messages);
+    },
+    [phase, userProfile.fullName, userProfile.lifePath, speakOracleMessages]
+  );
+
   // Auto-scroll to bottom on new messages and phase changes
-  // Phase changes can show/hide input which affects layout
   useEffect(() => {
-    // Small delay to allow DOM to update after phase change
     const timer = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -116,26 +140,18 @@ export default function ChatContainer() {
 
   // ============================================
   // PHASE 1: THE OPENING
-  // Goal: Hook immediately with intrigue (Stefan Georgi style)
-  // Uses: Surprising claim, identification, mechanism tease
   // ============================================
   const startConversation = useCallback(async () => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
-    // Initialize audio on first interaction
     initializeAudio();
-
-    // Start ambient sound
     playSound('ambient');
 
-    // Improved opening - tension, curiosity, identification
-    // Using speakOracleMessages for voiceover + typing animation
     await speakOracleMessages([
       "You felt it, didn't you?",
     ]);
 
-    // Strategic pause for effect
     await new Promise((resolve) => setTimeout(resolve, 800));
 
     await speakOracleMessages([
@@ -163,12 +179,14 @@ export default function ChatContainer() {
     ]);
 
     setPhase('collecting_dob');
-  }, [speakOracleMessages, setPhase, initializeAudio, playSound]);
+
+    // Generate dynamic suggestions for DOB collection
+    generateSuggestions("When were you born?");
+  }, [speakOracleMessages, setPhase, initializeAudio, playSound, generateSuggestions]);
 
   // Show start screen state
   const [showStartScreen, setShowStartScreen] = useState(true);
 
-  // Handle user clicking "Begin Reading" - this is the user gesture that enables audio
   const handleBeginReading = useCallback(() => {
     setShowStartScreen(false);
     startConversation();
@@ -176,36 +194,32 @@ export default function ChatContainer() {
 
   // ============================================
   // HANDLE USER INPUT - Core conversation flow
-  // All input is now text (including dates)
   // ============================================
   const handleUserInput = async (value: string) => {
     const trimmedValue = value.trim();
     if (!trimmedValue) return;
 
+    const validationType = getValidationType(phase);
+
+    // Clear suggestions when user submits
+    clearDynamicSuggestions();
+
     // ----------------------------------------
-    // PHASE: Collecting DOB (natural text input)
+    // PHASE: Collecting DOB
     // ----------------------------------------
     if (phase === 'collecting_dob') {
-      // Show what user typed
       addMessage({ type: 'user', content: trimmedValue });
 
-      // Parse the date
       const parseResult = parseDateString(trimmedValue);
 
       if (isParseError(parseResult)) {
-        // Oracle gently asks for clarification
-        await speakOracleMessages([
-          parseResult.error,
-          parseResult.suggestion,
-        ]);
+        await handleValidationError(parseResult.errorCode, parseResult.originalInput, 'date');
         return;
       }
 
-      // Successfully parsed date
       setUserDOB(parseResult.date);
-      setPhase('first_reveal');
+      setPhase('revealing_birth_numbers');
 
-      // Build anticipation
       await speakOracleMessages([
         "I see it now...",
         "Let me calculate the vibrations hidden in your birth date...",
@@ -215,37 +229,34 @@ export default function ChatContainer() {
       setCalculationDOB(parseResult.date);
       setShowCalculation(true);
 
-      // Wait for calculation animation to complete (3.5s for animation + 1s for effect)
       await new Promise((resolve) => setTimeout(resolve, 4500));
 
       const lifePath = useConversationStore.getState().userProfile.lifePath;
       const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
 
       if (interp) {
-        // Hide calculation, show in messages
         setShowCalculation(false);
-
-        // Play reveal sound
         playSound('reveal');
 
-        // REVEAL: Life Path Number (VSL moment - this is where they get hooked)
-        // Using Stefan Georgi's "Specificity + Flattery" technique
+        // Show constellation reveal
+        setActiveVisualization('constellation');
+
         await speakOracleMessages([
           `Life Path ${lifePath}.`,
           `${interp.name}.`,
         ]);
 
-        // Show the number reveal component
         addMessage({
           type: 'number-reveal',
           content: '',
           metadata: { number: lifePath! },
         });
 
-        // Strategic pause
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Reframe a challenge as strength (Stefan Georgi technique)
+        setActiveVisualization(null);
+        setPhase('revealing_life_path');
+
         await speakOracleMessages([
           interp.shortDescription,
           interp.coreDescription,
@@ -253,15 +264,39 @@ export default function ChatContainer() {
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
-        // Open loop for more
+        // First Oracle question
         await speakOracleMessages([
-          "But this is only your surface number.",
-          "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
-          "What is your full birth name?",
+          "Does this resonate with you?",
+          "What aspect of your life feels most affected by this energy?",
         ]);
 
-        setPhase('collecting_name');
+        setPhase('oracle_question_1');
+        generateSuggestions("What aspect of your life feels most affected by this energy?");
       }
+    }
+
+    // ----------------------------------------
+    // PHASE: Oracle Question 1 (after life path reveal)
+    // ----------------------------------------
+    else if (phase === 'oracle_question_1') {
+      addMessage({ type: 'user', content: trimmedValue });
+
+      // Acknowledge their response warmly
+      await speakOracleMessages([
+        "I see the truth in your words...",
+        "Your awareness is already shifting.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      await speakOracleMessages([
+        "But this is only your surface number.",
+        "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
+        "What is your full birth name?",
+      ]);
+
+      setPhase('collecting_name');
+      generateSuggestions("What is your full birth name?");
     }
 
     // ----------------------------------------
@@ -269,69 +304,96 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'collecting_name') {
       addMessage({ type: 'user', content: trimmedValue });
+
+      const nameValidation = validateName(trimmedValue);
+      if (!nameValidation.valid && nameValidation.errorCode) {
+        await handleValidationError(nameValidation.errorCode, trimmedValue, 'name');
+        return;
+      }
+
       setUserName(trimmedValue);
 
       const profile = useConversationStore.getState().userProfile;
-      const firstName = trimmedValue.split(' ')[0]; // Use first name for intimacy
+      const firstName = trimmedValue.split(' ')[0];
 
-      // Strategic pause - the Oracle is "processing"
       await speakOracleMessages([
         `${firstName}...`,
       ]);
 
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
-      // REVEAL: Expression + Soul Urge (more value before asking for more)
+      // Show letter transform animation for Expression
+      setActiveVisualization('letter-transform');
+
       await speakOracleMessages([
         "The letters of your name carry vibrations I can now read clearly.",
       ]);
 
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // Chime for Expression reveal
+      setActiveVisualization(null);
       playSound('chime');
+      setPhase('revealing_expression');
 
       await speakOracleMessages([
         `Your Expression Number is ${profile.expression}.`,
-        "This reveals your natural talents—the abilities you were born with, whether you've developed them yet or not.",
+        "This reveals your natural talents—the abilities you were born with.",
       ]);
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Chime for Soul Urge reveal
+      // Second Oracle question
+      await speakOracleMessages([
+        "Have you ever felt drawn to certain skills or abilities that seem to come naturally?",
+      ]);
+
+      setPhase('oracle_question_2');
+      generateSuggestions("Have you ever felt drawn to certain skills or abilities?");
+    }
+
+    // ----------------------------------------
+    // PHASE: Oracle Question 2 (after expression reveal)
+    // ----------------------------------------
+    else if (phase === 'oracle_question_2') {
+      addMessage({ type: 'user', content: trimmedValue });
+
+      const profile = useConversationStore.getState().userProfile;
+
+      await speakOracleMessages([
+        "Your intuition serves you well...",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       playSound('chime');
+      setPhase('revealing_soul_urge');
 
       await speakOracleMessages([
         `Your Soul Urge is ${profile.soulUrge}.`,
-        "This is your deepest desire. The secret longing that drives you, even when you don't consciously recognize it.",
+        "This is your deepest desire. The secret longing that drives you.",
       ]);
 
-      setPhase('deeper_reveal');
-
-      // Calculate personal year for added personalization
-      const criticalDates = calculateCriticalDates(profile.dob!, profile.lifePath!);
+      const criticalDates = profile.dob && profile.lifePath
+        ? calculateCriticalDates(profile.dob, profile.lifePath)
+        : null;
 
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
-      // Pain point agitation (Stefan Georgi technique)
-      await speakOracleMessages([
-        "I see much about you now, " + firstName + ".",
-        `You are in a Personal Year ${criticalDates.personalYear}—a year of ${getPersonalYearTheme(criticalDates.personalYear)}.`,
-      ]);
+      const firstName = profile.fullName?.split(' ')[0] || 'Dear one';
 
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      await speakOracleMessages([
-        "But there is something else I sense...",
-        "Something I almost didn't want to tell you.",
-      ]);
+      if (criticalDates) {
+        await speakOracleMessages([
+          `I see much about you now, ${firstName}.`,
+          `You are in a Personal Year ${criticalDates.personalYear}—a year of ${getPersonalYearTheme(criticalDates.personalYear)}.`,
+        ]);
+      }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       await speakOracleMessages([
+        "But there is something else I sense...",
         "There's someone in your life right now...",
         "Someone whose energy is affecting yours more than you realize.",
-        "For better... or for worse.",
       ]);
 
       await new Promise((resolve) => setTimeout(resolve, 800));
@@ -341,62 +403,104 @@ export default function ChatContainer() {
         "Who keeps appearing in your thoughts?",
       ]);
 
-      setPhase('relationship_hook');
+      setPhase('oracle_question_other_person');
+      generateSuggestions("Who keeps appearing in your thoughts?");
     }
 
     // ----------------------------------------
-    // PHASE: Relationship Hook (collecting other person's name)
+    // PHASE: Oracle Question about other person
     // ----------------------------------------
-    else if (phase === 'relationship_hook') {
+    else if (phase === 'oracle_question_other_person') {
       addMessage({ type: 'user', content: trimmedValue });
+
+      // Check if they want to skip
+      if (trimmedValue.toLowerCase().includes('skip')) {
+        await handleSkipRelationship();
+        return;
+      }
+
+      // They're interested in exploring someone
+      await speakOracleMessages([
+        "I sense a strong connection forming in your mind...",
+        "Tell me their name.",
+      ]);
+
+      setPhase('collecting_other_info');
+      generateSuggestions("Tell me their name.");
+    }
+
+    // ----------------------------------------
+    // PHASE: Collecting Other Person's Info (name)
+    // ----------------------------------------
+    else if (phase === 'collecting_other_info') {
+      addMessage({ type: 'user', content: trimmedValue });
+
+      const nameValidation = validateName(trimmedValue);
+      if (!nameValidation.valid && nameValidation.errorCode) {
+        await handleValidationError(nameValidation.errorCode, trimmedValue, 'name');
+        return;
+      }
+
       setOtherPerson(trimmedValue);
 
       await speakOracleMessages([
         `${trimmedValue}...`,
         "The universe is aligning to reveal this connection.",
-        `Do you know when ${trimmedValue} was born? This will unlock the compatibility between you.`,
       ]);
 
-      setPhase('collecting_other_dob');
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      await speakOracleMessages([
+        "What is your relationship with them?",
+        "What draws you to understand this connection?",
+      ]);
+
+      setPhase('oracle_question_relationship');
+      generateSuggestions("What draws you to understand this connection?");
     }
 
     // ----------------------------------------
-    // PHASE: Collecting Other Person's DOB (natural text input)
+    // PHASE: Oracle Question about Relationship
     // ----------------------------------------
-    else if (phase === 'collecting_other_dob') {
-      // Show what user typed
+    else if (phase === 'oracle_question_relationship') {
       addMessage({ type: 'user', content: trimmedValue });
 
-      // Parse the date
+      const otherName = useConversationStore.getState().otherPerson?.name || 'them';
+
+      await speakOracleMessages([
+        "I feel the weight of this connection...",
+        `Do you know when ${otherName} was born? This will unlock the compatibility between you.`,
+      ]);
+
+      setPhase('collecting_other_dob');
+      generateSuggestions(`When was ${otherName} born?`);
+    }
+
+    // ----------------------------------------
+    // PHASE: Collecting Other Person's DOB
+    // ----------------------------------------
+    else if (phase === 'collecting_other_dob') {
+      addMessage({ type: 'user', content: trimmedValue });
+
       const parseResult = parseDateString(trimmedValue);
 
       if (isParseError(parseResult)) {
-        // Oracle gently asks for clarification
-        await speakOracleMessages([
-          parseResult.error,
-          parseResult.suggestion,
-        ]);
+        await handleValidationError(parseResult.errorCode, parseResult.originalInput, 'date');
         return;
       }
 
-      // Successfully parsed date
       setOtherPersonDOB(parseResult.date);
       calculateCompatibilityScore();
 
-      // Hide input during compatibility reveal
-      setPhase('compatibility_tease');
+      setPhase('filler_compatibility');
 
       const state = useConversationStore.getState();
       const otherLifePath = state.otherPerson?.lifePath;
       const compat = state.compatibility;
       const otherName = state.otherPerson?.name || 'them';
-      const interp1 = getLifePathInterpretation(state.userProfile.lifePath!);
-      const interp2 = otherLifePath ? getLifePathInterpretation(otherLifePath) : null;
+      const userName = state.userProfile.fullName?.split(' ')[0] || 'you';
 
-      if (otherLifePath && compat && interp1 && interp2) {
-        const userName = state.userProfile.fullName?.split(' ')[0] || 'you';
-
-        // COMPATIBILITY TEASE (VSL technique: partial reveal with stakes)
+      if (otherLifePath && compat) {
         await speakOracleMessages([
           `I've seen your numbers alongside ${otherName}'s now.`,
         ]);
@@ -407,53 +511,26 @@ export default function ChatContainer() {
           `${userName}, I need you to understand something...`,
         ]);
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // Show compatibility visualization
+        setActiveVisualization('compatibility');
 
-        // Calculate critical dates for relationship
-        const relDates = calculateCompatibilityCriticalDates(
-          state.userProfile.dob!,
-          state.userProfile.lifePath!,
-          state.otherPerson!.dob!,
-          otherLifePath
-        );
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
-        // Chime for compatibility reveal
         playSound('chime');
+        setPhase('revealing_compatibility');
 
-        // Show the score but create curiosity about details
         await speakOracleMessages([
           `Your compatibility score is ${compat.score}%.`,
           compat.score >= 70
-            ? "That's not low. There's real potential here."
+            ? "There's real potential here."
             : compat.score >= 50
-            ? "That's not low. But it's not simple either."
-            : "That's challenging. But not impossible.",
+            ? "It's not simple, but there's depth."
+            : "Challenging, but not impossible.",
         ]);
+
+        setActiveVisualization(null);
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Specific numbers create intrigue (VSL technique)
-        await speakOracleMessages([
-          "I see THREE areas of harmony between you.",
-          "Connection points that could sustain you both through anything.",
-        ]);
-
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-
-        await speakOracleMessages([
-          "But I also see TWO friction patterns.",
-          "Places where your numbers clash in ways that could slowly erode what you've built...",
-        ]);
-
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        if (relDates.length > 0) {
-          await speakOracleMessages([
-            `And I see critical dates approaching—moments when your paths will intersect in meaningful ways...`,
-          ]);
-
-          await new Promise((resolve) => setTimeout(resolve, 800));
-        }
 
         await speakOracleMessages([
           "I can see the complete picture now.",
@@ -462,13 +539,13 @@ export default function ChatContainer() {
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Email capture before paywall
         await speakOracleMessages([
           "Before I reveal everything, I need a way to preserve this reading for you.",
           "Where should I send your complete numerology profile?",
         ]);
 
         setPhase('collecting_email');
+        generateSuggestions("Where should I send your reading?");
       }
     }
 
@@ -477,63 +554,108 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'collecting_email') {
       addMessage({ type: 'user', content: trimmedValue });
+
+      const emailValidation = validateEmail(trimmedValue);
+      if (!emailValidation.valid && emailValidation.errorCode) {
+        await handleValidationError(emailValidation.errorCode, trimmedValue, 'email');
+        return;
+      }
+
       setUserEmail(trimmedValue);
+      setPhase('preparing_report');
 
       const otherName = otherPerson?.name;
 
       await speakOracleMessages([
         "Your reading is being prepared...",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Final Oracle question
+      await speakOracleMessages([
+        "Before we proceed...",
+        "What is the one question burning in your heart right now?",
+      ]);
+
+      setPhase('oracle_final_question');
+      generateSuggestions("What is burning in your heart?");
+    }
+
+    // ----------------------------------------
+    // PHASE: Oracle Final Question
+    // ----------------------------------------
+    else if (phase === 'oracle_final_question') {
+      addMessage({ type: 'user', content: trimmedValue });
+
+      await speakOracleMessages([
+        "The stars have heard your question...",
+        "The answer lies within your complete reading.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      const otherName = otherPerson?.name;
+
+      await speakOracleMessages([
         otherName
           ? `Do you wish to see what the numbers reveal about you and ${otherName}?`
           : "Do you wish to see your complete numerology profile?",
       ]);
 
-      setPhase(otherPerson ? 'paywall' : 'personal_paywall');
+      setPhase('paywall');
+      generateSuggestions("Would you like to see your complete reading?");
     }
 
     // ----------------------------------------
-    // FREE-FORM INPUT: Acknowledge and redirect
+    // FREE-FORM INPUT: Acknowledge and redirect with mystical handling
     // ----------------------------------------
     else {
       addMessage({ type: 'user', content: trimmedValue });
 
-      // Warm acknowledgment + redirect back to flow
-      const redirectMessages = getRedirectMessages(phase);
-      await addOracleMessages(redirectMessages);
+      // Use mystical validation for off-topic redirects
+      await handleValidationError('OFF_TOPIC', trimmedValue, 'freeform');
     }
+  };
+
+  /**
+   * Handle skipping the relationship section
+   */
+  const handleSkipRelationship = async () => {
+    const profile = useConversationStore.getState().userProfile;
+    const criticalDates = profile.dob && profile.lifePath
+      ? calculateCriticalDates(profile.dob, profile.lifePath)
+      : null;
+
+    await speakOracleMessages([
+      "I understand. Some journeys are meant to be walked alone first.",
+      "Your personal numerology profile holds profound insights.",
+    ]);
+
+    if (criticalDates && criticalDates.dates.length > 0) {
+      const nextDate = criticalDates.dates[0];
+      await speakOracleMessages([
+        `I see a significant date approaching: ${nextDate.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}...`,
+      ]);
+    }
+
+    await speakOracleMessages([
+      "Before I reveal your complete reading, I need a way to preserve it for you.",
+      "Where should I send your full numerology profile?",
+    ]);
+
+    setPhase('collecting_email');
+    generateSuggestions("Where should I send your reading?");
   };
 
   // ============================================
   // HANDLE SUGGESTION CARDS
   // ============================================
   const handleSuggestion = async (suggestion: string) => {
-
     // Skip relationship option
-    if (suggestion === 'Skip for now - show me my full reading') {
+    if (suggestion.toLowerCase().includes('skip')) {
       addMessage({ type: 'user', content: suggestion });
-
-      const profile = useConversationStore.getState().userProfile;
-      const criticalDates = calculateCriticalDates(profile.dob!, profile.lifePath!);
-
-      await speakOracleMessages([
-        "I understand. Some journeys are meant to be walked alone first.",
-        "Your personal numerology profile holds profound insights.",
-      ]);
-
-      if (criticalDates.dates.length > 0) {
-        const nextDate = criticalDates.dates[0];
-        await speakOracleMessages([
-          `I see a significant date approaching: ${nextDate.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}...`,
-          `This ${nextDate.type} holds special meaning for your Life Path ${profile.lifePath}.`,
-        ]);
-      }
-
-      await speakOracleMessages([
-        "Before I reveal your complete reading, I need a way to preserve it for you.",
-        "Where should I send your full numerology profile?",
-      ]);
-
-      setPhase('collecting_email');
+      await handleSkipRelationship();
       return;
     }
 
@@ -546,59 +668,16 @@ export default function ChatContainer() {
       return;
     }
 
-    if (suggestion.includes('Unlock') || suggestion.includes('Reveal')) {
-      // Paywall modal handles this
+    if (suggestion.includes('Unlock') || suggestion.includes('Reveal') || suggestion.includes('Show me')) {
+      // Paywall modal handles this - don't add message
       return;
     }
 
-    addMessage({ type: 'user', content: suggestion });
-
-    // Phase-specific responses
-    if (phase === 'first_reveal') {
-      const interp = getLifePathInterpretation(userProfile.lifePath!);
-      if (interp) {
-        if (suggestion.includes('more about')) {
-          await speakOracleMessages([
-            `As a Life Path ${userProfile.lifePath}, you possess remarkable qualities...`,
-            `Your strengths include: ${interp.strengths.slice(0, 3).join(', ')}.`,
-            `But you must be mindful of: ${interp.challenges.slice(0, 2).join(' and ')}.`,
-          ]);
-        } else if (suggestion.includes('mean for my life')) {
-          await speakOracleMessages([
-            `The Life Path ${userProfile.lifePath} shapes everything about your journey.`,
-            interp.loveOverview,
-            `In career, you thrive as: ${interp.careers.slice(0, 3).join(', ')}.`,
-          ]);
-        }
-      }
-    } else if (phase === 'deeper_reveal') {
-      const interp = getLifePathInterpretation(userProfile.lifePath!);
-      if (interp) {
-        if (suggestion.includes('love life')) {
-          await speakOracleMessages([
-            "Ah, matters of the heart...",
-            interp.loveOverview,
-            "But to truly understand your romantic destiny, I would need to see who you are drawn to.",
-          ]);
-          setPhase('relationship_hook');
-        } else if (suggestion.includes('career')) {
-          await speakOracleMessages([
-            "Your numbers point clearly to certain paths...",
-            `You would excel as: ${interp.careers.join(', ')}.`,
-            `People like ${interp.famousPeople[0]} and ${interp.famousPeople[1]} share your Life Path.`,
-          ]);
-        } else if (suggestion.includes('blocking')) {
-          await speakOracleMessages([
-            "I sense resistance in your path...",
-            `Your challenges include: ${interp.challenges.join('. ')}.`,
-            "Understanding these shadow aspects is key to your growth.",
-          ]);
-        }
-      }
-    }
+    // For all other suggestions, treat as user input
+    await handleUserInput(suggestion);
   };
 
-  const showPaywall = (phase === 'paywall' || phase === 'personal_paywall') && !hasPaid;
+  const showPaywall = phase === 'paywall' && !hasPaid;
 
   // Show start screen before conversation begins
   if (showStartScreen) {
@@ -638,45 +717,45 @@ export default function ChatContainer() {
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Mute/Unmute button */}
-      <button
-        onClick={toggleMute}
-        className="absolute top-2 right-4 z-20 p-2 rounded-full bg-white/10 hover:bg-white/20
-                   transition-colors border border-white/20"
-        title={voiceState.isMuted ? 'Unmute Oracle' : 'Mute Oracle'}
-      >
-        {voiceState.isMuted ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5 text-white/70"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.531V19.94a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.506-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.395C2.806 8.757 3.63 8.25 4.51 8.25H6.75z"
-            />
-          </svg>
-        ) : (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5 text-white/70"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"
-            />
-          </svg>
-        )}
-      </button>
+      {/* Audio Controls */}
+      <div className="absolute top-2 right-4 z-20 flex gap-2">
+        {/* Voice Mute Button */}
+        <button
+          onClick={toggleVoiceMute}
+          className="p-2 rounded-full bg-white/10 hover:bg-white/20
+                     transition-colors border border-white/20 group"
+          title={voiceState.isMuted ? 'Unmute Voice' : 'Mute Voice'}
+        >
+          {voiceState.isMuted ? (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white/50">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.531V19.94a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.506-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.395C2.806 8.757 3.63 8.25 4.51 8.25H6.75z" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white/70">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+            </svg>
+          )}
+        </button>
+
+        {/* Ambient Sound Mute Button */}
+        <button
+          onClick={toggleAmbientMute}
+          className="p-2 rounded-full bg-white/10 hover:bg-white/20
+                     transition-colors border border-white/20 group"
+          title={isAmbientMuted ? 'Unmute Ambient' : 'Mute Ambient'}
+        >
+          {isAmbientMuted ? (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white/50">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white/70">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+            </svg>
+          )}
+        </button>
+      </div>
 
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto chat-scroll pt-4 pb-8">
@@ -703,7 +782,40 @@ export default function ChatContainer() {
             />
           )}
 
-          {/* Spacer to ensure last message is visible above input area */}
+          {/* Visualization Components */}
+          {activeVisualization === 'constellation' && userProfile.lifePath && (
+            <ConstellationReveal
+              number={userProfile.lifePath}
+              label="Life Path"
+            />
+          )}
+
+          {activeVisualization === 'sacred-geometry' && userProfile.lifePath && (
+            <SacredGeometryReveal
+              number={userProfile.lifePath}
+              label="Life Path"
+            />
+          )}
+
+          {activeVisualization === 'letter-transform' && userProfile.fullName && userProfile.expression && (
+            <LetterTransform
+              name={userProfile.fullName}
+              number={userProfile.expression}
+              label="Expression Number"
+              numberType="expression"
+            />
+          )}
+
+          {activeVisualization === 'compatibility' && userProfile.lifePath && otherPerson?.lifePath && compatibility && (
+            <CompatibilityVisual
+              userNumber={userProfile.lifePath}
+              otherNumber={otherPerson.lifePath}
+              compatibilityScore={compatibility.score}
+              userName={userProfile.fullName?.split(' ')[0]}
+              otherName={otherPerson.name}
+            />
+          )}
+
           <div className="h-4" />
           <div ref={messagesEndRef} />
         </div>
@@ -715,13 +827,15 @@ export default function ChatContainer() {
         onSelect={handleSuggestion}
         userName={userProfile.fullName || undefined}
         otherPersonName={otherPerson?.name}
+        dynamicSuggestions={aiSuggestions}
+        isLoading={suggestionsLoading}
       />
 
       {/* Input area */}
       <UserInput phase={phase} onSubmit={handleUserInput} disabled={isTyping} />
 
       {/* Paywall modal */}
-      {showPaywall && <PaywallModal isPersonalOnly={phase === 'personal_paywall'} />}
+      {showPaywall && <PaywallModal isPersonalOnly={!otherPerson} />}
     </div>
   );
 }
@@ -746,43 +860,4 @@ function getPersonalYearTheme(year: number): string {
     33: 'teaching and healing others',
   };
   return themes[year] || 'transformation';
-}
-
-function getRedirectMessages(phase: string): string[] {
-  const redirects: Record<string, string[]> = {
-    collecting_dob: [
-      "I sense your curiosity...",
-      "But first, I need your birth date to begin the reading.",
-    ],
-    collecting_name: [
-      "Your question reveals much about you already.",
-      "To answer fully, I need to know your complete birth name.",
-    ],
-    first_reveal: [
-      "Patience... the numbers are still revealing themselves.",
-      "Let me complete what I see before we explore further.",
-    ],
-    deeper_reveal: [
-      "Your eagerness speaks to your Life Path.",
-      "Let me finish painting this picture for you.",
-    ],
-    relationship_hook: [
-      "That touches on what I wish to explore next.",
-      "First, tell me - is there someone whose connection to you feels... significant?",
-    ],
-    collecting_other_dob: [
-      "All will be revealed in time.",
-      "For now, I need their birth date to see the full pattern.",
-    ],
-    collecting_email: [
-      "I hear you.",
-      "But first, where should I send your reading?",
-    ],
-    default: [
-      "I hear you.",
-      "Let us continue with the reading.",
-    ],
-  };
-
-  return redirects[phase] || redirects.default;
 }

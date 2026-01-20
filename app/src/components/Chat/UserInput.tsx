@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ConversationPhase } from '@/store/conversationStore';
+import type { ConversationPhase } from '@/lib/phaseConfig';
+import { getPhaseConfig, shouldShowInput } from '@/lib/phaseConfig';
 
 interface UserInputProps {
   phase: ConversationPhase;
@@ -14,9 +15,12 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
   const [textValue, setTextValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Get phase configuration
+  const config = getPhaseConfig(phase);
+
   // Focus input when phase changes and not disabled
   useEffect(() => {
-    if (!disabled && inputRef.current) {
+    if (!disabled && inputRef.current && shouldShowInput(phase)) {
       inputRef.current.focus();
     }
   }, [phase, disabled]);
@@ -29,42 +33,33 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
     setTextValue('');
   };
 
-  const getPlaceholder = () => {
-    switch (phase) {
-      case 'collecting_dob':
-        return 'Type your birthday (e.g., March 15, 1990)...';
-      case 'collecting_name':
-        return 'Enter your full birth name...';
-      case 'collecting_other_name':
-        return 'Enter their name...';
-      case 'collecting_other_dob':
-        return 'Type their birthday...';
-      case 'relationship_hook':
-        return "Enter someone's name...";
-      case 'collecting_email':
-        return 'Enter your email address...';
+  // Use config-based visibility
+  if (!shouldShowInput(phase)) {
+    return null;
+  }
+
+  const getInputType = () => {
+    switch (config.inputType) {
+      case 'email':
+        return 'email';
       default:
-        return 'Type your message...';
+        return 'text';
     }
   };
 
-  const getInputType = () => {
-    if (phase === 'collecting_email') return 'email';
-    return 'text';
+  const getAutoComplete = () => {
+    switch (config.inputType) {
+      case 'email':
+        return 'email';
+      case 'name':
+        return 'name';
+      default:
+        return 'off';
+    }
   };
 
-  // Hide input during certain phases (Oracle is speaking / paywall)
-  const hideInput =
-    phase === 'opening' ||
-    phase === 'first_reveal' ||
-    phase === 'deeper_reveal' ||
-    phase === 'compatibility_tease' ||
-    phase === 'paywall' ||
-    phase === 'personal_paywall';
-
-  if (hideInput) return null;
-
-  const isDatePhase = phase === 'collecting_dob' || phase === 'collecting_other_dob';
+  const isDatePhase = config.validation === 'date';
+  const isEmailPhase = config.validation === 'email';
 
   return (
     <AnimatePresence>
@@ -81,9 +76,9 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
             type={getInputType()}
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}
-            placeholder={getPlaceholder()}
+            placeholder={config.placeholder}
             disabled={disabled}
-            autoComplete={phase === 'collecting_email' ? 'email' : 'off'}
+            autoComplete={getAutoComplete()}
             className="flex-1 px-5 py-3.5 rounded-full bg-white/5 border border-[#d4af37]/30
                      text-white placeholder-white/40 focus:outline-none focus:border-[#d4af37]/60
                      focus:ring-2 focus:ring-[#d4af37]/20 transition-all disabled:opacity-50"
@@ -115,22 +110,14 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
           </motion.button>
         </div>
 
-        {isDatePhase && (
+        {/* Helper text */}
+        {config.helperText && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center text-xs text-white/40 mt-2"
           >
-            e.g., "March 15, 1990" or "3/15/1990"
-          </motion.p>
-        )}
-        {phase === 'collecting_email' && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center text-xs text-white/40 mt-2"
-          >
-            Your reading will be saved and sent to this address
+            {config.helperText}
           </motion.p>
         )}
       </motion.form>

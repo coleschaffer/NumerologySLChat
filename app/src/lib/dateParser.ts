@@ -24,29 +24,100 @@ const MONTHS: Record<string, number> = {
   december: 11, dec: 11,
 };
 
+/**
+ * Error codes for date parsing failures
+ * These are used by mysticalValidation.ts to generate contextual mystical responses
+ */
+export type DateParseErrorCode =
+  | 'EMPTY_INPUT'
+  | 'UNRECOGNIZED_FORMAT'
+  | 'INVALID_MONTH'
+  | 'INVALID_DAY'
+  | 'INVALID_YEAR'
+  | 'IMPOSSIBLE_DATE'
+  | 'FUTURE_DATE'
+  | 'OFF_TOPIC';
+
 export interface ParsedDate {
   date: Date;
   formatted: string;
 }
 
 export interface ParseError {
-  error: string;
-  suggestion: string;
+  errorCode: DateParseErrorCode;
+  originalInput: string;
+  /** Technical details for debugging */
+  details?: string;
 }
 
 export type ParseResult = ParsedDate | ParseError;
 
 export function isParseError(result: ParseResult): result is ParseError {
-  return 'error' in result;
+  return 'errorCode' in result;
+}
+
+/**
+ * Detect if input is clearly not a date attempt (off-topic input)
+ * This triggers mystical redirects instead of technical error messages
+ */
+function isOffTopicInput(input: string): boolean {
+  const cleaned = input.toLowerCase().trim();
+
+  // Check if there are any numbers at all
+  const hasNumbers = /\d/.test(cleaned);
+
+  // Check for month names
+  const hasMonthName = Object.keys(MONTHS).some(month => cleaned.includes(month));
+
+  // If no numbers AND no month names, it's likely off-topic
+  if (!hasNumbers && !hasMonthName) {
+    return true;
+  }
+
+  // Check for common off-topic patterns
+  const offTopicPatterns = [
+    /^(hi|hello|hey|sup|yo|what'?s? up)/i,
+    /^(thanks|thank you|thx)/i,
+    /^(how are you|how's it going)/i,
+    /^(what|who|where|why|when|how)\s/i, // Questions
+    /^(can you|could you|will you|would you)/i,
+    /^(i think|i feel|i want|i need|i am|i'm)/i,
+    /^(yes|no|maybe|sure|ok|okay|nope|nah)/i,
+    /[!?]{2,}/, // Multiple punctuation
+    /^[a-z]+\s+and\s+[a-z]+$/i, // "X and Y" patterns like "tacos and pizzas"
+  ];
+
+  for (const pattern of offTopicPatterns) {
+    if (pattern.test(cleaned)) {
+      return true;
+    }
+  }
+
+  // If input is very long (more than 30 chars) without date-like patterns
+  if (cleaned.length > 30 && !hasNumbers && !hasMonthName) {
+    return true;
+  }
+
+  return false;
 }
 
 export function parseDateString(input: string): ParseResult {
   const cleaned = input.trim().toLowerCase();
+  const originalInput = input.trim();
 
   if (!cleaned) {
     return {
-      error: "I didn't catch that.",
-      suggestion: "Try something like 'March 15, 1990' or '3/15/1990'",
+      errorCode: 'EMPTY_INPUT',
+      originalInput,
+    };
+  }
+
+  // Check for off-topic input first
+  if (isOffTopicInput(cleaned)) {
+    return {
+      errorCode: 'OFF_TOPIC',
+      originalInput,
+      details: 'Input does not appear to be a date attempt',
     };
   }
 
@@ -109,31 +180,35 @@ export function parseDateString(input: string): ParseResult {
   // Validate parsed values
   if (month === undefined || day === undefined || year === undefined) {
     return {
-      error: "I couldn't understand that date format.",
-      suggestion: "Try something like 'March 15, 1990' or '3/15/1990'",
+      errorCode: 'UNRECOGNIZED_FORMAT',
+      originalInput,
+      details: 'Could not extract month, day, and year from input',
     };
   }
 
   // Validate ranges
   if (month < 0 || month > 11) {
     return {
-      error: "That month doesn't look right.",
-      suggestion: "Please enter a valid month (1-12 or January-December)",
+      errorCode: 'INVALID_MONTH',
+      originalInput,
+      details: `Parsed month value: ${month + 1}`,
     };
   }
 
   if (day < 1 || day > 31) {
     return {
-      error: "That day doesn't look right.",
-      suggestion: "Please enter a valid day (1-31)",
+      errorCode: 'INVALID_DAY',
+      originalInput,
+      details: `Parsed day value: ${day}`,
     };
   }
 
   const currentYear = new Date().getFullYear();
   if (year < 1900 || year > currentYear) {
     return {
-      error: "That year doesn't seem right.",
-      suggestion: `Please enter a year between 1900 and ${currentYear}`,
+      errorCode: 'INVALID_YEAR',
+      originalInput,
+      details: `Parsed year value: ${year}`,
     };
   }
 
@@ -143,16 +218,17 @@ export function parseDateString(input: string): ParseResult {
   // Verify the date is valid (catches things like Feb 30)
   if (date.getMonth() !== month || date.getDate() !== day) {
     return {
-      error: "That date doesn't exist.",
-      suggestion: "Please check the day and month combination",
+      errorCode: 'IMPOSSIBLE_DATE',
+      originalInput,
+      details: `Date validation failed: expected ${month + 1}/${day}/${year}`,
     };
   }
 
   // Check it's not in the future
   if (date > new Date()) {
     return {
-      error: "That date is in the future.",
-      suggestion: "Please enter your actual birth date",
+      errorCode: 'FUTURE_DATE',
+      originalInput,
     };
   }
 
@@ -173,4 +249,63 @@ function normalizeYear(year: number): number {
     return year < 30 ? 2000 + year : 1900 + year;
   }
   return year;
+}
+
+/**
+ * Validate email format
+ */
+export function validateEmail(input: string): { valid: boolean; errorCode?: 'EMPTY_INPUT' | 'INVALID_FORMAT' | 'OFF_TOPIC' } {
+  const cleaned = input.trim();
+
+  if (!cleaned) {
+    return { valid: false, errorCode: 'EMPTY_INPUT' };
+  }
+
+  // Check for off-topic (no @ sign at all)
+  if (!cleaned.includes('@')) {
+    // Check if it looks like an attempt at an email
+    if (/[a-z0-9]/i.test(cleaned) && cleaned.length < 50) {
+      return { valid: false, errorCode: 'INVALID_FORMAT' };
+    }
+    return { valid: false, errorCode: 'OFF_TOPIC' };
+  }
+
+  // Basic email regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailRegex.test(cleaned)) {
+    return { valid: false, errorCode: 'INVALID_FORMAT' };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate name format
+ */
+export function validateName(input: string): { valid: boolean; errorCode?: 'EMPTY_INPUT' | 'TOO_SHORT' | 'INVALID_CHARACTERS' | 'OFF_TOPIC' } {
+  const cleaned = input.trim();
+
+  if (!cleaned) {
+    return { valid: false, errorCode: 'EMPTY_INPUT' };
+  }
+
+  // Check for off-topic patterns
+  if (isOffTopicInput(cleaned)) {
+    return { valid: false, errorCode: 'OFF_TOPIC' };
+  }
+
+  // Name should be at least 2 characters
+  if (cleaned.length < 2) {
+    return { valid: false, errorCode: 'TOO_SHORT' };
+  }
+
+  // Name should primarily contain letters (allow spaces, hyphens, apostrophes)
+  const nameRegex = /^[a-zA-Z][a-zA-Z\s\-']*[a-zA-Z]?$/;
+
+  if (!nameRegex.test(cleaned)) {
+    return { valid: false, errorCode: 'INVALID_CHARACTERS' };
+  }
+
+  return { valid: true };
 }

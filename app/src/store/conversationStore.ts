@@ -8,21 +8,10 @@ import {
   calculateCompatibility,
   getLifePathCalculationSteps,
 } from '@/lib/numerology';
+import type { ConversationPhase } from '@/lib/phaseConfig';
 
-export type ConversationPhase =
-  | 'opening'
-  | 'collecting_dob'
-  | 'first_reveal'
-  | 'collecting_name'
-  | 'deeper_reveal'
-  | 'relationship_hook'
-  | 'collecting_other_name'
-  | 'collecting_other_dob'
-  | 'compatibility_tease'
-  | 'collecting_email'
-  | 'personal_paywall'
-  | 'paywall'
-  | 'paid_reading';
+// Re-export the phase type for convenience
+export type { ConversationPhase } from '@/lib/phaseConfig';
 
 export type MessageType = 'oracle' | 'user' | 'system' | 'number-reveal' | 'calculation';
 
@@ -36,6 +25,7 @@ export interface Message {
     calculationSteps?: ReturnType<typeof getLifePathCalculationSteps>;
     isPartOfSequence?: boolean;
     typingDuration?: number; // Duration for typing animation in ms
+    visualization?: 'constellation' | 'sacred-geometry' | 'letter-transform' | 'compatibility';
   };
 }
 
@@ -56,6 +46,12 @@ export interface OtherPerson {
   lifePath: number | null;
 }
 
+export interface DynamicSuggestions {
+  suggestions: string[];
+  isLoading: boolean;
+  lastOracleQuestion: string | null;
+}
+
 export interface ConversationState {
   phase: ConversationPhase;
   messages: Message[];
@@ -65,6 +61,7 @@ export interface ConversationState {
   isTyping: boolean;
   hasPaid: boolean;
   paidTier: number | null;
+  dynamicSuggestions: DynamicSuggestions;
 
   // Actions
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
@@ -80,6 +77,8 @@ export interface ConversationState {
   calculateCompatibilityScore: () => void;
   setTyping: (isTyping: boolean) => void;
   setPaid: (tier: number) => void;
+  setDynamicSuggestions: (suggestions: string[], oracleQuestion?: string) => void;
+  clearDynamicSuggestions: () => void;
   reset: () => void;
 }
 
@@ -94,6 +93,12 @@ const initialUserProfile: UserProfile = {
   birthdayNumber: null,
 };
 
+const initialDynamicSuggestions: DynamicSuggestions = {
+  suggestions: [],
+  isLoading: false,
+  lastOracleQuestion: null,
+};
+
 export const useConversationStore = create<ConversationState>((set, get) => ({
   phase: 'opening',
   messages: [],
@@ -103,6 +108,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   isTyping: false,
   hasPaid: false,
   paidTier: null,
+  dynamicSuggestions: initialDynamicSuggestions,
 
   addMessage: (message) => {
     const newMessage: Message = {
@@ -260,6 +266,20 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   setPaid: (tier) => set({ hasPaid: true, paidTier: tier }),
 
+  setDynamicSuggestions: (suggestions, oracleQuestion) =>
+    set((state) => ({
+      dynamicSuggestions: {
+        suggestions,
+        isLoading: false,
+        lastOracleQuestion: oracleQuestion || state.dynamicSuggestions.lastOracleQuestion,
+      },
+    })),
+
+  clearDynamicSuggestions: () =>
+    set({
+      dynamicSuggestions: initialDynamicSuggestions,
+    }),
+
   reset: () =>
     set({
       phase: 'opening',
@@ -270,5 +290,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       isTyping: false,
       hasPaid: false,
       paidTier: null,
+      dynamicSuggestions: initialDynamicSuggestions,
     }),
 }));
