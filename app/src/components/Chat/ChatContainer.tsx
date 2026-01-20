@@ -1086,6 +1086,7 @@ export default function ChatContainer() {
                 message={message}
                 isLatest={message.id === messages[messages.length - 1]?.id}
                 typingDuration={message.metadata?.typingDuration}
+                onCalculationStepChange={scrollToBottom}
               />
             ))}
           </AnimatePresence>

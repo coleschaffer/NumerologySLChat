@@ -36,6 +36,10 @@ interface MessageBubbleProps {
    * Whether this message is currently being spoken (for streaming mode)
    */
   isSpeaking?: boolean;
+  /**
+   * Callback when calculation animation step changes (for auto-scroll)
+   */
+  onCalculationStepChange?: () => void;
 }
 
 export default function MessageBubble({
@@ -47,6 +51,7 @@ export default function MessageBubble({
   audioCurrentTime,
   isAudioPlaying,
   isSpeaking,
+  onCalculationStepChange,
 }: MessageBubbleProps) {
   const isOracle = message.type === 'oracle';
   const isUser = message.type === 'user';
@@ -92,7 +97,10 @@ export default function MessageBubble({
         transition={{ duration: 0.5 }}
         className="flex justify-center my-4"
       >
-        <CalculationVisual steps={message.metadata.calculationSteps} />
+        <CalculationVisual
+          steps={message.metadata.calculationSteps}
+          onStepChange={onCalculationStepChange}
+        />
       </motion.div>
     );
   }
