@@ -20,7 +20,7 @@ interface VoiceoverState {
 
 interface UseVoiceoverReturn {
   state: VoiceoverState;
-  speak: (text: string) => Promise<number>; // Returns duration in ms
+  speak: (text: string) => number; // Returns estimated duration immediately (ms)
   stop: () => void;
   toggleMute: () => void;
   preload: (text: string) => void;
@@ -29,13 +29,20 @@ interface UseVoiceoverReturn {
 // Cache for preloaded audio
 const audioCache = new Map<string, ArrayBuffer>();
 
-// Estimate speaking duration based on text length
-// Average speaking rate is ~150 words per minute, or ~12.5 chars per second
+/**
+ * Estimate speaking duration based on text length
+ * ElevenLabs multilingual_v2 speaks at roughly 12-14 chars/second
+ * Using ~13 chars/sec = ~77ms per character
+ */
+const MS_PER_CHAR = 77;
+const MIN_DURATION = 800;
+
 function estimateDuration(text: string): number {
-  const charsPerSecond = 12;
-  const baseDuration = (text.length / charsPerSecond) * 1000;
-  // Add padding for natural pauses
-  return baseDuration + 500;
+  const baseDuration = text.length * MS_PER_CHAR;
+  // Add extra time for punctuation pauses
+  const punctuationCount = (text.match(/[.!?,;:]/g) || []).length;
+  const punctuationPause = punctuationCount * 150;
+  return Math.max(MIN_DURATION, baseDuration + punctuationPause);
 }
 
 export function useVoiceover(): UseVoiceoverReturn {
@@ -109,85 +116,48 @@ export function useVoiceover(): UseVoiceoverReturn {
     return URL.createObjectURL(blob);
   }, []);
 
-  // Speak text - generates audio, starts playback, and returns duration immediately
-  // This allows the caller to start typing animation in sync with audio
+  /**
+   * TWO-PASS SPEAK: Returns estimated duration IMMEDIATELY, fetches audio in background
+   * This allows text animation to start instantly while audio loads
+   */
   const speak = useCallback(
-    async (text: string): Promise<number> => {
-      console.log('[Voiceover] speak() called for:', text.substring(0, 30) + '...');
+    (text: string): number => {
+      const estimated = estimateDuration(text);
+      console.log('[Voiceover] speak() - estimated duration:', estimated, 'ms for:', text.substring(0, 30) + '...');
 
-      if (!audioRef.current) {
-        console.warn('[Voiceover] No audio element available');
-        return estimateDuration(text);
-      }
-
-      // If muted, just return estimated duration
+      // If muted, just return estimated duration (no audio fetch)
       if (state.isMuted) {
-        console.log('[Voiceover] Muted, skipping audio playback');
-        return estimateDuration(text);
+        console.log('[Voiceover] Muted, skipping audio fetch');
+        return estimated;
       }
 
-      setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-      try {
-        const audioUrl = await generateSpeech(text);
-        console.log('[Voiceover] Audio URL generated:', audioUrl);
-
-        // Return a promise that resolves with duration once audio is ready to play
-        // (not when it ends - we want to start typing in sync)
-        // Add timeout to prevent hanging if audio fails to load
-        return new Promise((resolve) => {
-          if (!audioRef.current) {
-            resolve(estimateDuration(text));
-            return;
-          }
+      // Fetch and play audio in background (don't block)
+      generateSpeech(text)
+        .then((audioUrl) => {
+          if (!audioRef.current) return;
 
           const audio = audioRef.current;
-          let resolved = false;
-
-          // Timeout: if audio doesn't load in 10 seconds, fallback to estimated duration
-          const timeoutId = setTimeout(() => {
-            if (!resolved) {
-              console.warn('[Voiceover] Audio load timed out, using estimated duration');
-              resolved = true;
-              cleanup();
-              setState((prev) => ({
-                ...prev,
-                isLoading: false,
-                error: null, // Don't show error for timeout, just continue silently
-              }));
-              resolve(estimateDuration(text));
-            }
-          }, 10000);
 
           const handleEnded = () => {
-            cleanup();
             setState((prev) => ({
               ...prev,
               isPlaying: false,
               currentText: null,
             }));
+            setTimeout(() => URL.revokeObjectURL(audioUrl), 1000);
           };
 
-          const handleError = (e: Event) => {
-            if (resolved) return;
-            resolved = true;
-            clearTimeout(timeoutId);
-            cleanup();
-            console.error('Audio error:', e);
+          const handleError = () => {
+            console.error('[Voiceover] Audio playback error');
             setState((prev) => ({
               ...prev,
               isPlaying: false,
               isLoading: false,
-              error: 'Playback failed',
             }));
-            resolve(estimateDuration(text));
           };
 
           const handleCanPlay = () => {
-            if (resolved) return;
-            resolved = true;
-            clearTimeout(timeoutId);
-            console.log('[Voiceover] Audio can play, duration:', audio.duration);
+            console.log('[Voiceover] Audio ready, playing...');
             setState((prev) => ({
               ...prev,
               isLoading: false,
@@ -195,46 +165,32 @@ export function useVoiceover(): UseVoiceoverReturn {
               currentText: text,
             }));
 
-            // Get actual duration before starting playback
-            const actualDuration = audio.duration * 1000;
-
-            audio.play()
-              .then(() => {
-                console.log('[Voiceover] Playback started successfully');
-                // Resolve immediately with duration so typing can start in sync
-                resolve(actualDuration);
-              })
-              .catch((e) => {
-                console.error('[Voiceover] Playback failed:', e);
-                handleError(e);
-              });
+            audio.play().catch((e) => {
+              console.error('[Voiceover] Playback failed:', e);
+              handleError();
+            });
           };
 
-          const cleanup = () => {
-            audio.removeEventListener('ended', handleEnded);
-            audio.removeEventListener('error', handleError);
-            audio.removeEventListener('canplaythrough', handleCanPlay);
-            // Don't revoke URL immediately - audio still needs it
-            setTimeout(() => URL.revokeObjectURL(audioUrl), 60000);
-          };
+          // Clean up old listeners
+          audio.onended = handleEnded;
+          audio.onerror = handleError;
+          audio.oncanplaythrough = handleCanPlay;
 
-          audio.addEventListener('ended', handleEnded);
-          audio.addEventListener('error', handleError);
-          audio.addEventListener('canplaythrough', handleCanPlay);
-
+          setState((prev) => ({ ...prev, isLoading: true }));
           audio.src = audioUrl;
           audio.load();
+        })
+        .catch((error) => {
+          console.error('[Voiceover] Speech generation failed:', error);
+          setState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: 'Failed to generate speech',
+          }));
         });
-      } catch (error) {
-        console.error('Speech generation error:', error);
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error: 'Failed to generate speech',
-        }));
-        // Return estimated duration so typing can continue
-        return estimateDuration(text);
-      }
+
+      // Return estimated duration immediately (don't wait for audio)
+      return estimated;
     },
     [state.isMuted, generateSpeech]
   );

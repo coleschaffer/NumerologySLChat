@@ -34,7 +34,7 @@ import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
 import LetterTransform from '../Numerology/LetterTransform';
 import CompatibilityVisual from '../Numerology/CompatibilityVisual';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
-import { useVoiceoverStreaming } from '@/hooks/useVoiceoverStreaming';
+import { useVoiceover } from '@/hooks/useVoiceover';
 
 /**
  * ChatContainer - The main orchestrator for the Oracle chat experience
@@ -75,19 +75,13 @@ export default function ChatContainer() {
   const [showCalculation, setShowCalculation] = useState(false);
   const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
   const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
-  // Track which message is currently being spoken for alignment sync
-  const [currentSpeakingMessageId, setCurrentSpeakingMessageId] = useState<string | null>(null);
 
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
   const {
+    state: voiceState,
     speak,
-    isPlaying: isVoicePlaying,
-    isMuted: isVoiceMuted,
     toggleMute: toggleVoiceMute,
-    currentTime: audioCurrentTime,
-    isReady: isVoiceReady,
-    currentAlignment, // Progressive alignment from hook for real-time sync
-  } = useVoiceoverStreaming();
+  } = useVoiceover();
 
   // Dynamic suggestions hook
   const {
@@ -106,47 +100,32 @@ export default function ChatContainer() {
   const setTyping = useConversationStore((state) => state.setTyping);
 
   /**
-   * Speak oracle messages with WebSocket streaming voiceover
-   * Text syncs perfectly with audio using progressive alignment from hook
+   * Speak oracle messages with two-pass approach:
+   * 1. Get estimated duration immediately
+   * 2. Start text animation with that duration
+   * 3. Audio fetches and plays in background (roughly syncs)
    */
   const speakOracleMessages = useCallback(
     async (contents: string[]) => {
       for (let i = 0; i < contents.length; i++) {
         const text = contents[i];
 
-        try {
-          setTyping(true);
+        // speak() returns estimated duration immediately, fetches audio in background
+        const duration = speak(text);
 
-          // Add message first so it's visible during speech
-          addOracleMessageWithDuration(text, 0); // Duration 0 - we use alignment for sync
+        // Add message with the estimated duration for typing animation
+        addOracleMessageWithDuration(text, duration);
 
-          // Get the actual message ID from the store (it was just added)
-          const currentMessages = useConversationStore.getState().messages;
-          const addedMessage = currentMessages[currentMessages.length - 1];
-          setCurrentSpeakingMessageId(addedMessage?.id || null);
+        // Wait for the animation to complete
+        await new Promise((resolve) => setTimeout(resolve, duration));
 
-          // Speak with streaming - alignment updates progressively via hook
-          await speak(text);
-
-          setTyping(false);
-
-          // Brief pause before clearing speaking state
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          setCurrentSpeakingMessageId(null);
-
-          if (i < contents.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 400));
-          }
-        } catch (error) {
-          console.error('[ChatContainer] Error speaking message:', error);
-          setTyping(false);
-          setCurrentSpeakingMessageId(null);
-          // Message was already added, just wait for reading time
-          await new Promise((resolve) => setTimeout(resolve, Math.max(1500, text.length * 40)));
+        // Brief pause between messages
+        if (i < contents.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
         }
       }
     },
-    [speak, addOracleMessageWithDuration, setTyping]
+    [speak, addOracleMessageWithDuration]
   );
 
   /**
@@ -1055,9 +1034,9 @@ export default function ChatContainer() {
           onClick={toggleVoiceMute}
           className="p-2 rounded-full bg-white/10 hover:bg-white/20
                      transition-colors border border-white/20 group"
-          title={isVoiceMuted ? 'Unmute Voice' : 'Mute Voice'}
+          title={voiceState.isMuted ? 'Unmute Voice' : 'Mute Voice'}
         >
-          {isVoiceMuted ? (
+          {voiceState.isMuted ? (
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white/50">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.531V19.94a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.506-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.395C2.806 8.757 3.63 8.25 4.51 8.25H6.75z" />
             </svg>
@@ -1098,10 +1077,6 @@ export default function ChatContainer() {
                 message={message}
                 isLatest={message.id === messages[messages.length - 1]?.id}
                 typingDuration={message.metadata?.typingDuration}
-                alignment={message.id === currentSpeakingMessageId ? currentAlignment : null}
-                audioCurrentTime={audioCurrentTime}
-                isAudioPlaying={isVoicePlaying && message.id === currentSpeakingMessageId}
-                isSpeaking={message.id === currentSpeakingMessageId}
               />
             ))}
           </AnimatePresence>
