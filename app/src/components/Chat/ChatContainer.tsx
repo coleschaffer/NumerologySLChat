@@ -1017,9 +1017,6 @@ export default function ChatContainer() {
           >
             {currentCopy.button}
           </button>
-          <p className="text-white/30 text-xs mt-6">
-            🔊 This experience includes voice narration
-          </p>
         </div>
       </div>
     );

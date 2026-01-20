@@ -31,18 +31,20 @@ const audioCache = new Map<string, ArrayBuffer>();
 
 /**
  * Estimate speaking duration based on text length
- * ElevenLabs multilingual_v2 speaks at roughly 12-14 chars/second
- * Using ~13 chars/sec = ~77ms per character
+ * ElevenLabs multilingual_v2 speaks at roughly 10-12 chars/second
+ * Using ~95ms per character to account for audio loading delay
  */
-const MS_PER_CHAR = 77;
-const MIN_DURATION = 800;
+const MS_PER_CHAR = 95;
+const MIN_DURATION = 1200;
+const AUDIO_LOAD_BUFFER = 800; // Extra time for audio to load and start
 
 function estimateDuration(text: string): number {
   const baseDuration = text.length * MS_PER_CHAR;
   // Add extra time for punctuation pauses
   const punctuationCount = (text.match(/[.!?,;:]/g) || []).length;
-  const punctuationPause = punctuationCount * 150;
-  return Math.max(MIN_DURATION, baseDuration + punctuationPause);
+  const punctuationPause = punctuationCount * 200;
+  // Add buffer for audio loading
+  return Math.max(MIN_DURATION, baseDuration + punctuationPause + AUDIO_LOAD_BUFFER);
 }
 
 export function useVoiceover(): UseVoiceoverReturn {
