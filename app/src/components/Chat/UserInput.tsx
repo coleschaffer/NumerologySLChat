@@ -109,17 +109,6 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
             </svg>
           </motion.button>
         </div>
-
-        {/* Helper text */}
-        {config.helperText && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center text-xs text-white/40 mt-2"
-          >
-            {config.helperText}
-          </motion.p>
-        )}
       </motion.form>
     </AnimatePresence>
   );

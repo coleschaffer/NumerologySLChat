@@ -142,14 +142,10 @@ export default function ChatContainer() {
         await speakOracleMessages(messages);
         console.log('[ChatContainer] Finished speaking validation messages');
 
-        // Regenerate suggestions after validation error to guide user
-        const questionMap: Record<string, string> = {
-          date: "When were you born?",
-          name: "What is your full birth name?",
-          email: "Where should I send your reading?",
-          freeform: "What would you like to explore?",
-        };
-        generateSuggestions(questionMap[expectedInput]);
+        // Only generate suggestions for freeform input (date/name/email don't show suggestions)
+        if (expectedInput === 'freeform') {
+          generateSuggestions("What would you like to explore?");
+        }
       } catch (error) {
         console.error('[ChatContainer] Error in handleValidationError:', error);
         // Fallback: show simple redirect message without voiceover
@@ -165,15 +161,6 @@ export default function ChatContainer() {
           addOracleMessageWithDuration(msg, msg.length * 50);
           await new Promise(resolve => setTimeout(resolve, 800));
         }
-
-        // Still try to generate suggestions even in fallback
-        const questionMap: Record<string, string> = {
-          date: "When were you born?",
-          name: "What is your full birth name?",
-          email: "Where should I send your reading?",
-          freeform: "What would you like to explore?",
-        };
-        generateSuggestions(questionMap[expectedInput]);
       }
     },
     [phase, userProfile.fullName, userProfile.lifePath, speakOracleMessages, addOracleMessageWithDuration, generateSuggestions]
@@ -228,10 +215,8 @@ export default function ChatContainer() {
     ]);
 
     setPhase('collecting_dob');
-
-    // Generate dynamic suggestions for DOB collection
-    generateSuggestions("When were you born?");
-  }, [speakOracleMessages, setPhase, initializeAudio, playSound, generateSuggestions]);
+    // No suggestions for DOB collection - placeholder has format hint
+  }, [speakOracleMessages, setPhase, initializeAudio, playSound]);
 
   // Show start screen state
   const [showStartScreen, setShowStartScreen] = useState(true);
@@ -370,7 +355,7 @@ export default function ChatContainer() {
       ]);
 
       setPhase('collecting_name');
-      generateSuggestions("What is your full birth name?");
+      // No suggestions for name input
     }
 
     // ----------------------------------------
@@ -500,7 +485,7 @@ export default function ChatContainer() {
       ]);
 
       setPhase('collecting_other_info');
-      generateSuggestions("Tell me their name.");
+      // No suggestions for name input
     }
 
     // ----------------------------------------
@@ -547,7 +532,7 @@ export default function ChatContainer() {
       ]);
 
       setPhase('collecting_other_dob');
-      generateSuggestions(`When was ${otherName} born?`);
+      // No suggestions for date input
     }
 
     // ----------------------------------------
@@ -619,7 +604,7 @@ export default function ChatContainer() {
         ]);
 
         setPhase('collecting_email');
-        generateSuggestions("Where should I send your reading?");
+        // No suggestions for email input
       }
     }
 
@@ -727,7 +712,7 @@ export default function ChatContainer() {
     ]);
 
     setPhase('collecting_email');
-    generateSuggestions("Where should I send your reading?");
+    // No suggestions for email input
   };
 
   // ============================================

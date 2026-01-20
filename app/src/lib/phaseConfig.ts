@@ -69,10 +69,9 @@ export const phaseConfigs: Record<ConversationPhase, PhaseConfig> = {
 
   collecting_dob: {
     showInput: true,
-    showSuggestions: true,
+    showSuggestions: false, // No suggestions for date input
     inputType: 'date',
     placeholder: 'Type your birthday (e.g., March 15, 1990)...',
-    helperText: 'e.g., "March 15, 1990" or "3/15/1990"',
     validation: 'date',
     oracleSpeaking: false,
     expectsResponse: true,
@@ -136,10 +135,9 @@ export const phaseConfigs: Record<ConversationPhase, PhaseConfig> = {
 
   collecting_name: {
     showInput: true,
-    showSuggestions: true,
+    showSuggestions: false, // No suggestions for name input
     inputType: 'name',
     placeholder: 'Enter your full birth name...',
-    helperText: 'Use the name on your birth certificate',
     validation: 'name',
     oracleSpeaking: false,
     expectsResponse: true,
@@ -203,7 +201,7 @@ export const phaseConfigs: Record<ConversationPhase, PhaseConfig> = {
 
   collecting_other_info: {
     showInput: true,
-    showSuggestions: true,
+    showSuggestions: false, // No suggestions for name input
     inputType: 'name',
     placeholder: "Enter their name...",
     validation: 'name',
@@ -236,10 +234,9 @@ export const phaseConfigs: Record<ConversationPhase, PhaseConfig> = {
 
   collecting_other_dob: {
     showInput: true,
-    showSuggestions: true,
+    showSuggestions: false, // No suggestions for date input
     inputType: 'date',
     placeholder: 'Type their birthday...',
-    helperText: 'e.g., "March 15, 1990" or "3/15/1990"',
     validation: 'date',
     oracleSpeaking: false,
     expectsResponse: true,

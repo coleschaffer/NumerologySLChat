@@ -30,32 +30,38 @@ interface UseDynamicSuggestionsReturn extends DynamicSuggestionsState {
 
 /**
  * Fallback suggestions for each phase when API is unavailable
+ * These should match the specific Oracle question for each phase
  */
 const fallbackSuggestions: Partial<Record<ConversationPhase, string[]>> = {
+  // "What aspect of your life feels most affected by this energy?"
   oracle_question_1: [
-    'Tell me more about this number',
-    'What does this mean for my life?',
-    'I want to understand myself better',
+    'My relationships feel most affected',
+    'My career and purpose',
+    'My sense of inner peace',
   ],
+  // "Have you ever felt drawn to certain skills or abilities?"
   oracle_question_2: [
-    'What about my love life?',
-    'What career suits me?',
-    "What's blocking my success?",
+    'Yes, creativity and expression',
+    'Leadership and guiding others',
+    "I've always been intuitive",
   ],
+  // "Who keeps appearing in your thoughts?"
   oracle_question_other_person: [
-    'Yes, someone keeps appearing in my thoughts',
-    'Tell me about my relationships',
-    'I want to understand someone better',
+    'Someone I care about deeply',
+    'A romantic connection',
+    "I'd rather focus on myself",
   ],
+  // "What draws you to understand this connection?"
   oracle_question_relationship: [
-    'Tell me about our connection',
-    'What challenges do we face?',
-    'Is this meant to be?',
+    "I want to understand us better",
+    'There is tension I can\'t explain',
+    'I feel a deep bond',
   ],
+  // "What is the one question burning in your heart?"
   oracle_final_question: [
-    'Show me my complete reading',
-    'What else can you reveal?',
-    'I want to know everything',
+    'Will I find true love?',
+    'Am I on the right path?',
+    'What is my purpose?',
   ],
   paywall: [
     'Unlock My Complete Reading',

@@ -160,6 +160,8 @@ export async function POST(request: NextRequest) {
 
     if (mode === 'suggestions') {
       const parsedSuggestions = parseSuggestionsResponse(aiResponse);
+      console.log('[Oracle API] Parsed suggestions:', parsedSuggestions);
+      // Return parsed suggestions, or empty array if none (let client handle fallback)
       return NextResponse.json({ suggestions: parsedSuggestions });
     }
 
