@@ -20,6 +20,7 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
     phase === 'collecting_dob' || phase === 'collecting_other_dob';
   const isNameInput =
     phase === 'collecting_name' || phase === 'collecting_other_name';
+  const isEmailInput = phase === 'collecting_email';
 
   useEffect(() => {
     if (!disabled && inputRef.current) {
@@ -53,6 +54,8 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
         return 'Select their birth date';
       case 'relationship_hook':
         return "Enter someone's name...";
+      case 'collecting_email':
+        return 'Enter your email address...';
       default:
         return 'Type your message...';
     }
@@ -64,7 +67,8 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
     phase === 'first_reveal' ||
     phase === 'deeper_reveal' ||
     phase === 'compatibility_tease' ||
-    phase === 'paywall';
+    phase === 'paywall' ||
+    phase === 'personal_paywall';
 
   if (hideInput) return null;
 
@@ -96,6 +100,18 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
                 style={{ colorScheme: 'dark' }}
               />
             </div>
+          ) : isEmailInput ? (
+            <input
+              ref={inputRef}
+              type="email"
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              placeholder={getPlaceholder()}
+              disabled={disabled}
+              className="flex-1 px-5 py-3.5 rounded-full bg-white/5 border border-[#d4af37]/30
+                       text-white placeholder-white/40 focus:outline-none focus:border-[#d4af37]/60
+                       focus:ring-2 focus:ring-[#d4af37]/20 transition-all disabled:opacity-50"
+            />
           ) : (
             <input
               ref={inputRef}
@@ -143,6 +159,15 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
             className="text-center text-xs text-white/40 mt-2"
           >
             Your birth date unlocks the secrets of your Life Path
+          </motion.p>
+        )}
+        {isEmailInput && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center text-xs text-white/40 mt-2"
+          >
+            Your reading will be saved and sent to this address
           </motion.p>
         )}
       </motion.form>

@@ -296,7 +296,7 @@ export function getLifePathInterpretation(number: number): LifePathInterpretatio
   return lifePathInterpretations[number] || null;
 }
 
-// Oracle opening messages based on life path
+// Oracle opening messages based on life path (Stefan Georgi style)
 export function getOracleRevealMessage(lifePath: number): string[] {
   const interp = lifePathInterpretations[lifePath];
   if (!interp) return [];
@@ -306,6 +306,119 @@ export function getOracleRevealMessage(lifePath: number): string[] {
     `You are "${interp.name}."`,
     interp.shortDescription,
     interp.coreDescription,
+  ];
+}
+
+// Enhanced opening hook (Stefan Georgi "Surprising Claim" technique)
+export function getEnhancedOpeningMessages(): string[] {
+  return [
+    "You felt it, didn't you?",
+    "That pull. That sense that something in your life is slightly... off. Like you're following a script you didn't write.",
+    "There's a reason for that. And it's hidden in the exact moment you took your first breath.",
+    "Tell me... when were you born?",
+  ];
+}
+
+// Enhanced reveal messages that reframe negatives as positives
+export function getEnhancedRevealMessages(lifePath: number, userName?: string): string[] {
+  const reframes: Record<number, { negative: string; positive: string; question: string }> = {
+    1: {
+      negative: "stubborn",
+      positive: "You're not stubborn—you're CERTAIN. You see what needs to be done while others are still debating.",
+      question: "Has someone ever held you back from something you knew was right?",
+    },
+    2: {
+      negative: "too sensitive",
+      positive: "You're not too sensitive—you're PERCEPTIVE. You see what others miss entirely.",
+      question: "Have you ever known something was wrong before anyone else noticed?",
+    },
+    3: {
+      negative: "scattered",
+      positive: "You're not scattered—you're MULTIDIMENSIONAL. Your mind sees connections others can't.",
+      question: "Do people ever fail to understand the vision you're trying to share?",
+    },
+    4: {
+      negative: "rigid",
+      positive: "You're not rigid—you're PRINCIPLED. You build things that last because you refuse to compromise on what matters.",
+      question: "Have you ever been forced to abandon something you believed in?",
+    },
+    5: {
+      negative: "restless",
+      positive: "You're not restless—you're ALIVE. You understand that growth requires movement.",
+      question: "Do you feel caged when life becomes too predictable?",
+    },
+    6: {
+      negative: "controlling",
+      positive: "You're not controlling—you're RESPONSIBLE. You care too much to let things fall apart.",
+      question: "Do people come to you when everything else has failed?",
+    },
+    7: {
+      negative: "distant",
+      positive: "You're not distant—you're SELECTIVE. Your inner world is too rich for shallow connections.",
+      question: "Do you sometimes feel like you're speaking a language no one else understands?",
+    },
+    8: {
+      negative: "ambitious to a fault",
+      positive: "You're not ambitious to a fault—you're DESTINED FOR IMPACT. Small thinking has never been an option for you.",
+      question: "Have you ever known you were meant for more than where you are?",
+    },
+    9: {
+      negative: "naive",
+      positive: "You're not naive—you're HOPEFUL. You see the potential in people because you carry that same potential.",
+      question: "Do you find yourself giving to others even when they don't deserve it?",
+    },
+    11: {
+      negative: "anxious",
+      positive: "You're not anxious—you're ATTUNED. You pick up energies others don't even know exist.",
+      question: "Have you ever known something was about to happen before it did?",
+    },
+    22: {
+      negative: "overwhelming",
+      positive: "You're not overwhelming—you're VISIONARY. Your ideas are simply larger than most people can hold.",
+      question: "Do your dreams feel too big to explain to others?",
+    },
+    33: {
+      negative: "a doormat",
+      positive: "You're not a doormat—you're a HEALER. Your giving isn't weakness, it's your greatest power.",
+      question: "Do people seem to feel better just by being in your presence?",
+    },
+  };
+
+  const reframe = reframes[lifePath] || reframes[9];
+  const namePrefix = userName ? `${userName}, ` : "";
+
+  return [
+    `${namePrefix}let me tell you something about yourself...`,
+    `You've been called "${reframe.negative}" before. But they don't understand.`,
+    reframe.positive,
+    reframe.question,
+  ];
+}
+
+// Enhanced compatibility tease with specificity (Stefan Georgi "Partial Reveal with Stakes")
+export function getEnhancedCompatibilityTease(
+  lifePath1: number,
+  lifePath2: number,
+  name2: string,
+  score: number
+): string[] {
+  const level = score >= 70 ? 'high' : score >= 50 ? 'moderate' : 'challenging';
+
+  const harmonies = Math.floor(Math.random() * 2) + 2; // 2-3 harmony points
+  const warnings = Math.floor(Math.random() * 2) + 1;  // 1-2 warning points
+
+  return [
+    `I've seen your numbers alongside ${name2}'s now.`,
+    `I need you to understand something...`,
+    `Your compatibility score is ${score}%.`,
+    level === 'high'
+      ? `That's strong. But strong connections require understanding.`
+      : level === 'moderate'
+      ? `That's not low. But it's not simple either.`
+      : `That number carries weight. But challenging doesn't mean impossible.`,
+    `I see ${harmonies} areas of deep harmony between you. Connection points that could sustain you both through anything.`,
+    `But I also see ${warnings} friction pattern${warnings > 1 ? 's' : ''}. Places where your numbers clash in ways that could slowly erode what you've built...`,
+    `The full picture reveals which paths strengthen you... and which ones to navigate with care.`,
   ];
 }
 

@@ -183,6 +183,154 @@ export function calculateFullProfile(
   };
 }
 
+// Calculate critical dates for the year based on numerology cycles
+export function calculateCriticalDates(dob: Date, lifePath: number): {
+  dates: { date: Date; type: string; description: string }[];
+  personalYear: number;
+} {
+  const currentYear = new Date().getFullYear();
+  const birthMonth = dob.getMonth();
+  const birthDay = dob.getDate();
+
+  // Calculate Personal Year Number
+  const personalYearSum = reduceToSingleDigit(birthMonth + 1) +
+    reduceToSingleDigit(birthDay) +
+    reduceToSingleDigit(String(currentYear).split('').reduce((sum, d) => sum + parseInt(d), 0));
+  const personalYear = reduceToSingleDigit(personalYearSum);
+
+  const dates: { date: Date; type: string; description: string }[] = [];
+
+  // Birthday - always significant
+  const birthday = new Date(currentYear, birthMonth, birthDay);
+  if (birthday > new Date()) {
+    dates.push({
+      date: birthday,
+      type: 'Personal New Year',
+      description: `Your numerological new year begins. A powerful reset aligned with your Life Path ${lifePath}.`,
+    });
+  }
+
+  // Personal Month peaks (when personal month = life path)
+  for (let month = 0; month < 12; month++) {
+    const personalMonth = reduceToSingleDigit(personalYear + month + 1);
+    if (personalMonth === lifePath) {
+      const peakDate = new Date(currentYear, month, 15);
+      if (peakDate > new Date()) {
+        dates.push({
+          date: peakDate,
+          type: 'Peak Energy Month',
+          description: `Your personal month aligns with your Life Path. Heightened intuition and opportunity.`,
+        });
+      }
+    }
+  }
+
+  // Universal day matches (day of month = life path)
+  const nextMonth = new Date().getMonth();
+  for (let m = nextMonth; m < nextMonth + 3 && m < 12; m++) {
+    if (lifePath <= 28) {
+      const matchDate = new Date(currentYear, m, lifePath);
+      if (matchDate > new Date()) {
+        dates.push({
+          date: matchDate,
+          type: 'Power Day',
+          description: `The ${lifePath}th day resonates with your core vibration. Take meaningful action.`,
+        });
+      }
+    }
+  }
+
+  // Pinnacle transitions (simplified - using quarters)
+  const quarterDates = [
+    new Date(currentYear, 2, 20), // Spring equinox
+    new Date(currentYear, 5, 21), // Summer solstice
+    new Date(currentYear, 8, 22), // Fall equinox
+    new Date(currentYear, 11, 21), // Winter solstice
+  ];
+
+  quarterDates.forEach((qDate, i) => {
+    if (qDate > new Date()) {
+      const seasonNames = ['Spring', 'Summer', 'Fall', 'Winter'];
+      dates.push({
+        date: qDate,
+        type: `${seasonNames[i]} Turning Point`,
+        description: `A seasonal shift amplifies transitions in your ${personalYear} personal year.`,
+      });
+    }
+  });
+
+  // Sort by date and return top 3
+  dates.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  return {
+    dates: dates.slice(0, 3),
+    personalYear,
+  };
+}
+
+// Calculate compatibility critical dates for two people
+export function calculateCompatibilityCriticalDates(
+  dob1: Date,
+  lifePath1: number,
+  dob2: Date,
+  lifePath2: number
+): { date: Date; type: string; description: string }[] {
+  const currentYear = new Date().getFullYear();
+  const dates: { date: Date; type: string; description: string }[] = [];
+
+  // When personal months align
+  const py1 = calculateCriticalDates(dob1, lifePath1).personalYear;
+  const py2 = calculateCriticalDates(dob2, lifePath2).personalYear;
+
+  for (let month = 0; month < 12; month++) {
+    const pm1 = reduceToSingleDigit(py1 + month + 1);
+    const pm2 = reduceToSingleDigit(py2 + month + 1);
+
+    if (pm1 === pm2) {
+      const alignDate = new Date(currentYear, month, 15);
+      if (alignDate > new Date()) {
+        dates.push({
+          date: alignDate,
+          type: 'Energetic Alignment',
+          description: `Both of your personal months vibrate at ${pm1}. A window for deep connection.`,
+        });
+      }
+    }
+  }
+
+  // Composite number peaks (sum of life paths reduced)
+  const composite = reduceToSingleDigit(lifePath1 + lifePath2);
+  if (composite <= 28) {
+    for (let m = new Date().getMonth(); m < 12; m++) {
+      const compDate = new Date(currentYear, m, composite);
+      if (compDate > new Date()) {
+        dates.push({
+          date: compDate,
+          type: 'Relationship Power Day',
+          description: `The ${composite}th represents your combined energy. Important decisions favor this day.`,
+        });
+        break; // Just get the next one
+      }
+    }
+  }
+
+  // Anniversary of meeting (placeholder - would need actual date)
+  // Using midpoint between birthdays as symbolic
+  const midMonth = Math.floor((dob1.getMonth() + dob2.getMonth()) / 2);
+  const midDay = Math.floor((dob1.getDate() + dob2.getDate()) / 2);
+  const symbolicDate = new Date(currentYear, midMonth, Math.min(midDay, 28));
+  if (symbolicDate > new Date()) {
+    dates.push({
+      date: symbolicDate,
+      type: 'Soul Connection Day',
+      description: `A numerologically significant date for your unique bond. Ideal for meaningful conversations.`,
+    });
+  }
+
+  dates.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return dates.slice(0, 3);
+}
+
 // Format the calculation steps for display
 export function getLifePathCalculationSteps(dob: Date): {
   month: { original: number; reduced: number };

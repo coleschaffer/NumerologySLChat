@@ -24,13 +24,20 @@ const suggestionsByPhase: Record<ConversationPhase, string[]> = {
     'What career suits me?',
     "What's blocking my success?",
   ],
-  relationship_hook: [],
+  relationship_hook: [
+    'Skip for now - show me my full reading',
+  ],
   collecting_other_name: [],
   collecting_other_dob: [],
   compatibility_tease: [
     'Tell me about our connection',
     'What challenges do we face?',
     'Is this meant to be?',
+  ],
+  collecting_email: [],
+  personal_paywall: [
+    'Unlock My Personal Reading',
+    'Maybe later',
   ],
   paywall: [
     'Unlock My Complete Reading',

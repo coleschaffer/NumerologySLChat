@@ -8,6 +8,47 @@ A conversational sales interface disguised as a mystical "Oracle" that delivers 
 
 ---
 
+## MVP Scope (Interview Decisions - January 2026)
+
+### What's IN the MVP
+- Complete conversational flow (all phases through paywall)
+- AI-enhanced Oracle responses (hybrid approach - see below)
+- Email capture before paywall
+- Full animations on all devices (mobile included)
+- Linear navigation only (no back button)
+- Trust user input completely (no validation)
+- Allow skipping relationship questions (show personal-only paywall)
+- Algorithmically-derived "critical dates" based on numerology cycles
+- Real numerology-based compatibility calculations
+
+### What's DEFERRED to V2
+- Payment processing (Stripe integration)
+- Subscription tier
+- Email recovery links for access
+- Analytics/tracking
+- User feedback mechanisms
+- Social sharing features
+
+### AI Integration Approach: Hybrid
+The Oracle uses a **scripted conversational flow** with **AI-generated flourishes**:
+- Core structure and transitions are scripted for consistency
+- Claude API adds personalized "color" - unique phrasings, specific insights
+- User can type freely; Oracle acknowledges then redirects to flow
+- Aggressive AI usage (not concerned about API costs)
+- **Deployment:** Railway with `ANTHROPIC_API_KEY_STEFAN` environment variable
+
+### Interaction Design
+- User is **passive during reveals** (no interaction needed mid-reading)
+- Free-form input: Oracle acknowledges warmly, then redirects
+- Entertainment disclaimers woven naturally into Oracle voice
+- No age restrictions
+- No user feedback mechanism for MVP
+
+### Timeline
+**ASAP - Days** (not weeks). Accept rough edges, keep all features.
+
+---
+
 ## The Big Idea (Stefan Georgi Framework)
 
 ### Building Blocks
@@ -155,7 +196,7 @@ Floating cards that appear contextually to guide conversation:
 
 ### Typography & UI Elements
 
-- **Oracle Name:** Something like "The Oracle" or "Numeris" or "The Codex"
+- **Oracle Name:** "The Oracle" (decided)
 - **Font:** Mystical but readable (something like Cinzel for headers, clean sans for body)
 - **Numbers:** Should appear with special styling when calculated (gold, glowing)
 - **Progress Indicator:** Subtle indicator of "reading depth" or "connection strength"
@@ -241,9 +282,9 @@ type ConversationPhase =
   | 'paid_reading'      // Full unlocked content
 ```
 
-### AI Integration (Optional Enhancement)
+### AI Integration (Required for MVP)
 
-Use LLM to generate personalized narrative around the numbers:
+Use Claude API to generate personalized narrative around the numbers:
 - Take calculated numbers + user context
 - Generate flowing, mystical prose
 - Personalize based on their stated challenges
@@ -350,6 +391,30 @@ Good: "I see strength in you that others mistake for stubbornness. Your Life Pat
 
 Bad: "As a Life Path 1, you might be seen as a natural leader who could potentially have some independent tendencies."
 
+### Handling Free-Form User Input
+
+When user types something off-script, the Oracle should:
+1. **Acknowledge warmly** - validate what they said
+2. **Redirect to flow** - guide back to the next question/reveal
+3. **Not be too interactive** - this is a reading, not a chat
+
+Example:
+```
+User: "Can you tell me about my career?"
+Oracle: "Your career path is woven into the very numbers we're uncovering together.
+        But first, I need to see your complete picture.
+        Tell me... what is your full birth name?"
+```
+
+### Entertainment Disclaimer
+
+Woven naturally into Oracle voice (not a separate legal notice):
+```
+Oracle: "The ancient art of numerology speaks to patterns and possibilities,
+        not certainties. What I reveal is for your reflection and entertainment—
+        the true power lies in what you choose to do with this knowledge."
+```
+
 ---
 
 ## Technical Requirements
@@ -360,7 +425,7 @@ Bad: "As a Life Path 1, you might be seen as a natural leader who could potentia
 - **Styling:** Tailwind CSS + Framer Motion for animations
 - **State:** Zustand or React Context for conversation state
 - **Payments:** Stripe Checkout or Stripe Elements
-- **AI (optional):** Anthropic Claude API or OpenAI
+- **AI (required):** Anthropic Claude API (via Railway, env: ANTHROPIC_API_KEY_STEFAN)
 - **Analytics:** Mixpanel or Amplitude for funnel tracking
 - **Background:** Three.js or CSS animations for cosmos effect
 
@@ -410,35 +475,37 @@ Bad: "As a Life Path 1, you might be seen as a natural leader who could potentia
 
 ---
 
-## Development Phases
+## Development Phases (Revised for MVP Sprint)
 
-### Phase 1: Core Chat MVP (Week 1-2)
-- Basic chat interface with cosmos background
-- DOB collection and Life Path calculation
-- First reveal experience
-- Suggestion cards system
-- Mobile responsive
+### MVP Sprint (Days, Not Weeks)
+**Goal:** Complete free flow through paywall, with AI-enhanced Oracle
 
-### Phase 2: Full Free Flow (Week 2-3)
-- Name collection and Expression number
-- Relationship question flow
-- Compatibility tease (without full reveal)
-- Paywall modal
-- Polish animations and transitions
+Must-haves:
+- [ ] Cosmos background with full animations (mobile included)
+- [ ] Complete conversation flow (opening → paywall)
+- [ ] DOB collection → Life Path reveal
+- [ ] Name collection → Expression/Soul Urge reveals
+- [ ] Relationship question (skippable)
+- [ ] Compatibility tease (if relationship provided)
+- [ ] Email capture before paywall
+- [ ] Paywall modal (non-functional for MVP)
+- [ ] Claude API integration for personalized Oracle responses
+- [ ] Suggestion cards at each phase
+- [ ] "Critical dates" calculation (algorithmic)
 
-### Phase 3: Payment & Unlock (Week 3-4)
-- Stripe integration
-- Tier 1 unlockable content
-- Full personal reading delivery
-- Relationship reading delivery
-- Receipt and access management
+Accept rough edges on:
+- Animation polish
+- Edge case handling
+- Error states
 
-### Phase 4: Enhancement (Week 4+)
-- AI-personalized narratives
+### V2 (Post-MVP)
+- Stripe payment integration
 - Subscription tier
-- Email capture and follow-up
-- A/B testing framework
+- Email recovery/access links
 - Analytics dashboard
+- A/B testing framework
+- Social sharing
+- Multiple relationship flows
 
 ---
 
@@ -466,13 +533,21 @@ Bad: "As a Life Path 1, you might be seen as a natural leader who could potentia
 
 ---
 
-## Open Questions
+## Open Questions (Resolved)
 
-1. **Oracle naming:** "The Oracle" vs branded name like "Numeris" or "The Codex"?
-2. **Social features:** Should users be able to share readings or compare with friends?
-3. **Email capture:** Where in the flow? Before or after first payment?
-4. **Gamification:** Badges, streaks for subscribers?
-5. **Multiple people flow:** How to handle when user wants to check multiple relationships?
+| Question | Decision |
+|----------|----------|
+| Oracle naming | **"The Oracle"** - simple and mystical |
+| Social features | **Deferred to V2** |
+| Email capture | **Before paywall** - capture leads even if they don't convert |
+| Gamification | **Deferred to V2** |
+| Multiple people flow | **Keep in MVP** - accept rough edges |
+| Compatibility calculation | **Real numerology algorithm** - not arbitrary |
+| Critical dates | **Algorithmically derived** from numerology cycles |
+| Input validation | **Trust user completely** - no validation |
+| Navigation | **Linear only** - no back button |
+| Age restrictions | **None** |
+| Analytics | **Deferred to MVP** - no tracking |
 
 ---
 
@@ -508,4 +583,4 @@ Life Path: 3 + 6 + 1 = 10 → 1+0 = 1
 
 ---
 
-*PRD Version 1.0 - Ready for implementation*
+*PRD Version 1.1 - Updated with MVP interview decisions (January 2026)*

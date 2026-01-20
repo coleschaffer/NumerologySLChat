@@ -19,6 +19,8 @@ export type ConversationPhase =
   | 'collecting_other_name'
   | 'collecting_other_dob'
   | 'compatibility_tease'
+  | 'collecting_email'
+  | 'personal_paywall'
   | 'paywall'
   | 'paid_reading';
 
@@ -39,6 +41,7 @@ export interface Message {
 export interface UserProfile {
   dob: Date | null;
   fullName: string | null;
+  email: string | null;
   lifePath: number | null;
   expression: number | null;
   soulUrge: number | null;
@@ -70,6 +73,7 @@ export interface ConversationState {
   setUserName: (name: string) => void;
   setOtherPerson: (name: string, dob?: Date) => void;
   setOtherPersonDOB: (dob: Date) => void;
+  setUserEmail: (email: string) => void;
   calculateUserNumbers: () => void;
   calculateCompatibilityScore: () => void;
   setTyping: (isTyping: boolean) => void;
@@ -80,6 +84,7 @@ export interface ConversationState {
 const initialUserProfile: UserProfile = {
   dob: null,
   fullName: null,
+  email: null,
   lifePath: null,
   expression: null,
   soulUrge: null,
@@ -186,6 +191,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       otherPerson: state.otherPerson
         ? { ...state.otherPerson, dob, lifePath }
         : null,
+    }));
+  },
+
+  setUserEmail: (email) => {
+    set((state) => ({
+      userProfile: {
+        ...state.userProfile,
+        email,
+      },
     }));
   },
 
