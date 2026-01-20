@@ -26,6 +26,9 @@ import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
 import SuggestionCards from './SuggestionCards';
 import PaywallModal from '../Payment/PaywallModal';
+import CalculationAnimation, {
+  generateLifePathSteps,
+} from './CalculationAnimation';
 import ConstellationReveal from '../Numerology/ConstellationReveal';
 import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
 import LetterTransform from '../Numerology/LetterTransform';
@@ -69,10 +72,9 @@ export default function ChatContainer() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
+  const [showCalculation, setShowCalculation] = useState(false);
+  const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
   const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
-  // Inline constellation (stays in chat, scrolls with messages)
-  const [showInlineConstellation, setShowInlineConstellation] = useState(false);
-  const [constellationNumber, setConstellationNumber] = useState<number | null>(null);
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
   const { speak, state: voiceState, toggleMute: toggleVoiceMute } = useVoiceover();
 
@@ -229,11 +231,40 @@ export default function ChatContainer() {
 
   // Show start screen state
   const [showStartScreen, setShowStartScreen] = useState(true);
+  const [copyVariant, setCopyVariant] = useState(0);
+
+  // Copy variants for A/B testing
+  const copyOptions = [
+    {
+      headline: "The Hidden Code in Your Birthday",
+      subhead: "In the next 3 minutes, you'll discover why certain patterns keep repeating in your life—and the ancient \"Birth Vibration\" that's been quietly shaping your relationships, career, and deepest desires since the moment you were born.",
+      button: "Reveal My Hidden Code",
+    },
+    {
+      headline: "What If Your Life Isn't Random?",
+      subhead: "There's a reason you keep attracting the same situations. A reason certain people feel instantly familiar. The Oracle has decoded 2,847 birth dates this month alone—and what the numbers reveal is never what people expect.",
+      button: "Show Me What the Numbers Say",
+    },
+    {
+      headline: "3 Numbers That Explain Everything",
+      subhead: "Your Life Path. Your Expression. Your Soul Urge. These three numbers—hidden in your name and birthday—reveal why you feel the way you do, what you're truly meant for, and who you're cosmically compatible with.",
+      button: "Calculate My Numbers",
+    },
+    {
+      headline: "The Truth Written in Your Birth Date",
+      subhead: "Most people live their entire lives without knowing the single number that governs their destiny. In 90 seconds, the Oracle will reveal yours—along with something about your love life that may finally make sense.",
+      button: "Begin My Reading",
+    },
+  ];
 
   const handleBeginReading = useCallback(() => {
     setShowStartScreen(false);
     startConversation();
   }, [startConversation]);
+
+  const handleNextCopyVariant = useCallback(() => {
+    setCopyVariant((prev) => (prev + 1) % copyOptions.length);
+  }, [copyOptions.length]);
 
   // ============================================
   // HANDLE USER INPUT - Core conversation flow
@@ -287,21 +318,21 @@ export default function ChatContainer() {
 
         await speakOracleMessages([
           "I see it now...",
-          "The vibrations hidden in your birth date are becoming clear...",
+          "Let me decode the vibrations hidden in your birth date...",
         ]);
 
-        // Brief pause for anticipation
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // Show calculation animation
+        setCalculationDOB(parseResult.date);
+        setShowCalculation(true);
+
+        // Wait for the calculation animation to complete (3 steps x 1.8s + pauses)
+        await new Promise((resolve) => setTimeout(resolve, 9000));
 
         const lifePath = useConversationStore.getState().userProfile.lifePath;
         const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
 
         if (interp) {
           playSound('reveal');
-
-          // Show constellation inline with chat - it will persist
-          setConstellationNumber(lifePath);
-          setShowInlineConstellation(true);
 
           // Get AI-personalized interpretation
           const aiResult = lifePath ? await getInterpretation('lifePath', lifePath, {
@@ -319,8 +350,7 @@ export default function ChatContainer() {
           const titleParts = interpretation.title.split('. ').filter(Boolean);
           await speakOracleMessages(titleParts.map(p => p.endsWith('.') ? p : `${p}.`));
 
-          // Let constellation animation complete
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 1500));
 
           setPhase('revealing_life_path');
 
@@ -328,6 +358,9 @@ export default function ChatContainer() {
             interpretation.shortDescription,
             interpretation.coreDescription,
           ]);
+
+          // Hide calculation after interpretation
+          setShowCalculation(false);
 
           await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -351,6 +384,7 @@ export default function ChatContainer() {
           generateSuggestions(question1[question1.length - 1] || "What aspect of your life feels most affected by this energy?");
         } else {
           console.error('[ChatContainer] No interpretation found for life path:', lifePath);
+          setShowCalculation(false);
           // Fallback - still ask a question before showing input
           await speakOracleMessages([
             `Your Life Path Number is ${lifePath}.`,
@@ -362,6 +396,7 @@ export default function ChatContainer() {
         }
       } catch (error) {
         console.error('[ChatContainer] Error in DOB handling:', error);
+        setShowCalculation(false);
         setActiveVisualization(null);
         await speakOracleMessages([
           "I sense a disturbance in the connection...",
@@ -948,22 +983,33 @@ export default function ChatContainer() {
 
   // Show start screen before conversation begins
   if (showStartScreen) {
+    const currentCopy = copyOptions[copyVariant];
     return (
-      <div className="flex flex-col h-full items-center justify-center px-4">
-        <div className="text-center max-w-md">
+      <div className="flex flex-col h-full items-center justify-center px-4 relative">
+        {/* Copy variant toggle button */}
+        <button
+          onClick={handleNextCopyVariant}
+          className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20
+                     transition-colors border border-white/20 group"
+          title={`Copy variant ${copyVariant + 1}/${copyOptions.length} - Click to switch`}
+        >
+          <span className="text-white/50 text-xs font-mono group-hover:text-white/70">
+            {copyVariant + 1}/{copyOptions.length}
+          </span>
+        </button>
+
+        <div className="text-center max-w-lg">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#d4af37] to-[#9b59b6] flex items-center justify-center">
             <span className="text-4xl">🔮</span>
           </div>
           <h2
-            className="text-2xl font-medium text-white mb-3"
+            className="text-2xl md:text-3xl font-medium text-white mb-4 leading-tight"
             style={{ fontFamily: 'var(--font-cinzel), serif' }}
           >
-            The Oracle Awaits
+            {currentCopy.headline}
           </h2>
-          <p className="text-white/60 mb-8 leading-relaxed">
-            Your personal numerology reading is about to begin.
-            <br />
-            <span className="text-white/40 text-sm">For the best experience, enable sound.</span>
+          <p className="text-white/70 mb-8 leading-relaxed text-base md:text-lg">
+            {currentCopy.subhead}
           </p>
           <button
             onClick={handleBeginReading}
@@ -972,7 +1018,7 @@ export default function ChatContainer() {
                      hover:from-[#e0c04a] hover:to-[#c9a632] transition-all
                      box-glow-gold transform hover:scale-105"
           >
-            Begin Your Reading
+            {currentCopy.button}
           </button>
           <p className="text-white/30 text-xs mt-6">
             🔊 This experience includes voice narration
@@ -1040,13 +1086,12 @@ export default function ChatContainer() {
 
           {isTyping && <TypingIndicator />}
 
-          {/* Constellation Reveal - inline with chat, persists */}
-          {showInlineConstellation && constellationNumber && (
-            <ConstellationReveal
-              number={constellationNumber}
-              label="Life Path"
-              isOverlay={false}
-              persist={true}
+          {/* Calculation Animation - shows step-by-step numerology math */}
+          {showCalculation && calculationDOB && (
+            <CalculationAnimation
+              steps={generateLifePathSteps(calculationDOB)}
+              result={useConversationStore.getState().userProfile.lifePath || 0}
+              resultLabel="Your Life Path"
             />
           )}
 
