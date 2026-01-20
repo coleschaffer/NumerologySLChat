@@ -91,21 +91,29 @@ export default function ChatContainer() {
       for (let i = 0; i < contents.length; i++) {
         const text = contents[i];
 
-        setTyping(true);
-        const audioDuration = await speak(text);
-        setTyping(false);
+        try {
+          setTyping(true);
+          const audioDuration = await speak(text);
+          setTyping(false);
 
-        // Add 4% buffer to typing duration so text finishes with audio
-        const bufferedAudioDuration = audioDuration * 1.04;
-        const estimatedTypingDuration = text.length * 60;
-        const typingDuration = Math.max(bufferedAudioDuration, estimatedTypingDuration);
+          // Add 4% buffer to typing duration so text finishes with audio
+          const bufferedAudioDuration = audioDuration * 1.04;
+          const estimatedTypingDuration = text.length * 60;
+          const typingDuration = Math.max(bufferedAudioDuration, estimatedTypingDuration);
 
-        addOracleMessageWithDuration(text, typingDuration);
+          addOracleMessageWithDuration(text, typingDuration);
 
-        await new Promise((resolve) => setTimeout(resolve, typingDuration));
+          await new Promise((resolve) => setTimeout(resolve, typingDuration));
 
-        if (i < contents.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 400));
+          if (i < contents.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+          }
+        } catch (error) {
+          console.error('[ChatContainer] Error speaking message:', error);
+          setTyping(false);
+          // Still show the message even if voice fails
+          addOracleMessageWithDuration(text, text.length * 50);
+          await new Promise((resolve) => setTimeout(resolve, text.length * 50));
         }
       }
     },
@@ -118,18 +126,53 @@ export default function ChatContainer() {
    */
   const handleValidationError = useCallback(
     async (errorCode: string, originalInput: string, expectedInput: 'date' | 'name' | 'email' | 'freeform') => {
-      const messages = await getMysticalValidationMessages({
-        phase,
-        errorCode: errorCode as any,
-        originalInput,
-        userName: userProfile.fullName || undefined,
-        lifePath: userProfile.lifePath || undefined,
-        expectedInput,
-      });
+      try {
+        const messages = await getMysticalValidationMessages({
+          phase,
+          errorCode: errorCode as any,
+          originalInput,
+          userName: userProfile.fullName || undefined,
+          lifePath: userProfile.lifePath || undefined,
+          expectedInput,
+        });
 
-      await speakOracleMessages(messages);
+        await speakOracleMessages(messages);
+
+        // Regenerate suggestions after validation error to guide user
+        const questionMap: Record<string, string> = {
+          date: "When were you born?",
+          name: "What is your full birth name?",
+          email: "Where should I send your reading?",
+          freeform: "What would you like to explore?",
+        };
+        generateSuggestions(questionMap[expectedInput]);
+      } catch (error) {
+        console.error('[ChatContainer] Error in handleValidationError:', error);
+        // Fallback: show simple redirect message without voiceover
+        const fallbackMessages = [
+          "I sense something isn't quite right...",
+          expectedInput === 'date' ? "When were you born? Share your birthday with me." :
+          expectedInput === 'name' ? "What is your full birth name?" :
+          expectedInput === 'email' ? "Where should I send your complete reading?" :
+          "Tell me more..."
+        ];
+        // Add messages directly without voiceover as last resort
+        for (const msg of fallbackMessages) {
+          addOracleMessageWithDuration(msg, msg.length * 50);
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+
+        // Still try to generate suggestions even in fallback
+        const questionMap: Record<string, string> = {
+          date: "When were you born?",
+          name: "What is your full birth name?",
+          email: "Where should I send your reading?",
+          freeform: "What would you like to explore?",
+        };
+        generateSuggestions(questionMap[expectedInput]);
+      }
     },
-    [phase, userProfile.fullName, userProfile.lifePath, speakOracleMessages]
+    [phase, userProfile.fullName, userProfile.lifePath, speakOracleMessages, addOracleMessageWithDuration, generateSuggestions]
   );
 
   // Auto-scroll to bottom on new messages and phase changes

@@ -134,6 +134,7 @@ export function useVoiceover(): UseVoiceoverReturn {
 
         // Return a promise that resolves with duration once audio is ready to play
         // (not when it ends - we want to start typing in sync)
+        // Add timeout to prevent hanging if audio fails to load
         return new Promise((resolve) => {
           if (!audioRef.current) {
             resolve(estimateDuration(text));
@@ -141,6 +142,22 @@ export function useVoiceover(): UseVoiceoverReturn {
           }
 
           const audio = audioRef.current;
+          let resolved = false;
+
+          // Timeout: if audio doesn't load in 10 seconds, fallback to estimated duration
+          const timeoutId = setTimeout(() => {
+            if (!resolved) {
+              console.warn('[Voiceover] Audio load timed out, using estimated duration');
+              resolved = true;
+              cleanup();
+              setState((prev) => ({
+                ...prev,
+                isLoading: false,
+                error: null, // Don't show error for timeout, just continue silently
+              }));
+              resolve(estimateDuration(text));
+            }
+          }, 10000);
 
           const handleEnded = () => {
             cleanup();
@@ -152,6 +169,9 @@ export function useVoiceover(): UseVoiceoverReturn {
           };
 
           const handleError = (e: Event) => {
+            if (resolved) return;
+            resolved = true;
+            clearTimeout(timeoutId);
             cleanup();
             console.error('Audio error:', e);
             setState((prev) => ({
@@ -160,9 +180,13 @@ export function useVoiceover(): UseVoiceoverReturn {
               isLoading: false,
               error: 'Playback failed',
             }));
+            resolve(estimateDuration(text));
           };
 
           const handleCanPlay = () => {
+            if (resolved) return;
+            resolved = true;
+            clearTimeout(timeoutId);
             console.log('[Voiceover] Audio can play, duration:', audio.duration);
             setState((prev) => ({
               ...prev,
@@ -183,7 +207,6 @@ export function useVoiceover(): UseVoiceoverReturn {
               .catch((e) => {
                 console.error('[Voiceover] Playback failed:', e);
                 handleError(e);
-                resolve(estimateDuration(text));
               });
           };
 
