@@ -46,6 +46,15 @@ export default function TypewriterText({
   const [isComplete, setIsComplete] = useState(skipAnimation);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const indexRef = useRef(0);
+  // Use ref for onComplete to prevent animation restart when callback changes
+  const onCompleteRef = useRef(onComplete);
+  // Track if animation has started to prevent restarts
+  const hasStartedRef = useRef(false);
+
+  // Keep onComplete ref up to date
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     // Reset when text changes
@@ -55,9 +64,15 @@ export default function TypewriterText({
       return;
     }
 
+    // Prevent animation restart if already started with same text
+    if (hasStartedRef.current && displayedText.length > 0) {
+      return;
+    }
+
     setDisplayedText('');
     setIsComplete(false);
     indexRef.current = 0;
+    hasStartedRef.current = true;
 
     // Calculate delay per character
     const charDelay = duration ? duration / text.length : msPerChar;
@@ -85,7 +100,7 @@ export default function TypewriterText({
         timeoutRef.current = setTimeout(typeNextChar, nextDelay + punctuationPause);
       } else {
         setIsComplete(true);
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     };
 
@@ -97,7 +112,9 @@ export default function TypewriterText({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [text, duration, msPerChar, skipAnimation, onComplete]);
+    // Only depend on text, duration, msPerChar, skipAnimation - NOT onComplete
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, duration, msPerChar, skipAnimation]);
 
   return (
     <span className={className}>

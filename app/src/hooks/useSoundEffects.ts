@@ -8,7 +8,7 @@
  * increase engagement and perceived mysticism.
  */
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 
 type SoundType = 'ambient' | 'chime' | 'reveal' | 'transition' | 'success';
 
@@ -20,6 +20,7 @@ export function useSoundEffects() {
   const ambientGainRef = useRef<GainNode | null>(null);
   const ambientOscRef = useRef<OscillatorNode | null>(null);
   const isInitializedRef = useRef(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   // Initialize audio context on first user interaction
   const initialize = useCallback(() => {
@@ -215,6 +216,22 @@ export function useSoundEffects() {
     }
   }, []);
 
+  // Toggle mute for ambient sound
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const newMuted = !prev;
+      if (ambientGainRef.current && audioContextRef.current) {
+        const ctx = audioContextRef.current;
+        if (newMuted) {
+          ambientGainRef.current.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+        } else {
+          ambientGainRef.current.gain.linearRampToValueAtTime(0.02, ctx.currentTime + 0.3);
+        }
+      }
+      return newMuted;
+    });
+  }, []);
+
   // Master play function
   const play = useCallback(
     (sound: SoundType) => {
@@ -253,6 +270,8 @@ export function useSoundEffects() {
     play,
     initialize,
     stopAmbient,
+    toggleMute,
+    isMuted,
   };
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Message } from '@/store/conversationStore';
 import NumberReveal from '../Numerology/NumberReveal';
 import CalculationVisual from '../Numerology/CalculationVisual';
@@ -45,10 +45,10 @@ export default function MessageBubble({
     }
   }, [isLatest, isOracle]);
 
-  const handleTypingComplete = () => {
+  const handleTypingComplete = useCallback(() => {
     setHasAnimated(true);
     onTypingComplete?.();
-  };
+  }, [onTypingComplete]);
 
   if (isNumberReveal && message.metadata?.number) {
     return (
