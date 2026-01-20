@@ -35,6 +35,7 @@ export interface Message {
     number?: number;
     calculationSteps?: ReturnType<typeof getLifePathCalculationSteps>;
     isPartOfSequence?: boolean;
+    typingDuration?: number; // Duration for typing animation in ms
   };
 }
 
@@ -68,6 +69,7 @@ export interface ConversationState {
   // Actions
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   addOracleMessages: (contents: string[], delayMs?: number) => Promise<void>;
+  addOracleMessageWithDuration: (content: string, typingDuration: number) => void;
   setPhase: (phase: ConversationPhase) => void;
   setUserDOB: (dob: Date) => void;
   setUserName: (name: string) => void;
@@ -132,6 +134,16 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
     }
+  },
+
+  // Add a single oracle message with voiceover support
+  addOracleMessageWithDuration: (content: string, typingDuration: number) => {
+    const { addMessage } = get();
+    addMessage({
+      type: 'oracle',
+      content,
+      metadata: { typingDuration },
+    });
   },
 
   setPhase: (phase) => set({ phase }),

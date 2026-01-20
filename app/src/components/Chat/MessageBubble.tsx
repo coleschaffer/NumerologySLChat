@@ -1,20 +1,54 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import type { Message } from '@/store/conversationStore';
 import NumberReveal from '../Numerology/NumberReveal';
 import CalculationVisual from '../Numerology/CalculationVisual';
+import TypewriterText from './TypewriterText';
 
 interface MessageBubbleProps {
   message: Message;
   isLatest?: boolean;
+  /**
+   * Duration for typing animation (ms). If provided, enables typewriter effect.
+   * Only applies to Oracle messages.
+   */
+  typingDuration?: number;
+  /**
+   * Callback when typing animation completes
+   */
+  onTypingComplete?: () => void;
 }
 
-export default function MessageBubble({ message, isLatest }: MessageBubbleProps) {
+export default function MessageBubble({
+  message,
+  isLatest,
+  typingDuration,
+  onTypingComplete,
+}: MessageBubbleProps) {
   const isOracle = message.type === 'oracle';
   const isUser = message.type === 'user';
   const isNumberReveal = message.type === 'number-reveal';
   const isCalculation = message.type === 'calculation';
+
+  // Track if this message's animation has completed
+  const [hasAnimated, setHasAnimated] = useState(false);
+
+  // Only animate if this is the latest Oracle message and hasn't animated yet
+  const shouldAnimate = isOracle && isLatest && !hasAnimated && typingDuration;
+
+  // Mark as animated when component unmounts or when no longer latest
+  useEffect(() => {
+    if (!isLatest && isOracle) {
+      setHasAnimated(true);
+    }
+  }, [isLatest, isOracle]);
+
+  const handleTypingComplete = () => {
+    setHasAnimated(true);
+    onTypingComplete?.();
+  };
 
   if (isNumberReveal && message.metadata?.number) {
     return (
@@ -75,7 +109,15 @@ export default function MessageBubble({ message, isLatest }: MessageBubbleProps)
               : 'text-white/50'
           }`}
         >
-          {message.content}
+          {shouldAnimate ? (
+            <TypewriterText
+              text={message.content}
+              duration={typingDuration}
+              onComplete={handleTypingComplete}
+            />
+          ) : (
+            message.content
+          )}
         </p>
       </div>
     </motion.div>
