@@ -306,7 +306,7 @@ export default function ChatContainer() {
       const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
 
       if (interp) {
-        setShowCalculation(false);
+        // Keep calculation animation visible - it will fade out with the constellation
         playSound('reveal');
 
         // Show constellation reveal as fixed overlay - persists throughout explanation
@@ -339,8 +339,9 @@ export default function ChatContainer() {
           interpretation.coreDescription,
         ]);
 
-        // Fade out constellation after explanation
+        // Fade out constellation and calculation animation after explanation
         setShowConstellationOverlay(false);
+        setShowCalculation(false);
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
