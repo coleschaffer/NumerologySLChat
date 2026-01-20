@@ -20,7 +20,7 @@ interface VoiceoverState {
 
 interface UseVoiceoverReturn {
   state: VoiceoverState;
-  speak: (text: string) => number; // Returns estimated duration immediately (ms)
+  speak: (text: string) => Promise<number>; // Resolves with duration when audio is ready
   stop: () => void;
   toggleMute: () => void;
   preload: (text: string) => void;
@@ -119,13 +119,13 @@ export function useVoiceover(): UseVoiceoverReturn {
   }, []);
 
   /**
-   * TWO-PASS SPEAK: Returns estimated duration IMMEDIATELY, fetches audio in background
-   * This allows text animation to start instantly while audio loads
+   * SYNCED SPEAK: Waits for audio to load, then starts playback and returns duration
+   * This allows text animation to start exactly when audio starts
    */
   const speak = useCallback(
-    (text: string): number => {
+    async (text: string): Promise<number> => {
       const estimated = estimateDuration(text);
-      console.log('[Voiceover] speak() - estimated duration:', estimated, 'ms for:', text.substring(0, 30) + '...');
+      console.log('[Voiceover] speak() called for:', text.substring(0, 30) + '...');
 
       // If muted, just return estimated duration (no audio fetch)
       if (state.isMuted) {
@@ -133,12 +133,29 @@ export function useVoiceover(): UseVoiceoverReturn {
         return estimated;
       }
 
-      // Fetch and play audio in background (don't block)
-      generateSpeech(text)
-        .then((audioUrl) => {
-          if (!audioRef.current) return;
+      setState((prev) => ({ ...prev, isLoading: true }));
 
-          const audio = audioRef.current;
+      try {
+        const audioUrl = await generateSpeech(text);
+
+        if (!audioRef.current) {
+          return estimated;
+        }
+
+        const audio = audioRef.current;
+
+        return new Promise((resolve) => {
+          let resolved = false;
+
+          // Timeout after 8 seconds - use estimated duration as fallback
+          const timeoutId = setTimeout(() => {
+            if (!resolved) {
+              console.warn('[Voiceover] Audio load timeout, using estimated duration');
+              resolved = true;
+              setState((prev) => ({ ...prev, isLoading: false }));
+              resolve(estimated);
+            }
+          }, 8000);
 
           const handleEnded = () => {
             setState((prev) => ({
@@ -150,16 +167,23 @@ export function useVoiceover(): UseVoiceoverReturn {
           };
 
           const handleError = () => {
-            console.error('[Voiceover] Audio playback error');
-            setState((prev) => ({
-              ...prev,
-              isPlaying: false,
-              isLoading: false,
-            }));
+            if (resolved) return;
+            resolved = true;
+            clearTimeout(timeoutId);
+            console.error('[Voiceover] Audio error');
+            setState((prev) => ({ ...prev, isLoading: false, isPlaying: false }));
+            resolve(estimated);
           };
 
           const handleCanPlay = () => {
-            console.log('[Voiceover] Audio ready, playing...');
+            if (resolved) return;
+            resolved = true;
+            clearTimeout(timeoutId);
+
+            // Get actual duration from loaded audio
+            const actualDuration = audio.duration * 1000;
+            console.log('[Voiceover] Audio ready, duration:', actualDuration, 'ms');
+
             setState((prev) => ({
               ...prev,
               isLoading: false,
@@ -167,32 +191,27 @@ export function useVoiceover(): UseVoiceoverReturn {
               currentText: text,
             }));
 
+            // Start playback
             audio.play().catch((e) => {
               console.error('[Voiceover] Playback failed:', e);
-              handleError();
             });
+
+            // Return actual duration so text animation matches audio
+            resolve(actualDuration);
           };
 
-          // Clean up old listeners
           audio.onended = handleEnded;
           audio.onerror = handleError;
           audio.oncanplaythrough = handleCanPlay;
 
-          setState((prev) => ({ ...prev, isLoading: true }));
           audio.src = audioUrl;
           audio.load();
-        })
-        .catch((error) => {
-          console.error('[Voiceover] Speech generation failed:', error);
-          setState((prev) => ({
-            ...prev,
-            isLoading: false,
-            error: 'Failed to generate speech',
-          }));
         });
-
-      // Return estimated duration immediately (don't wait for audio)
-      return estimated;
+      } catch (error) {
+        console.error('[Voiceover] Speech generation failed:', error);
+        setState((prev) => ({ ...prev, isLoading: false }));
+        return estimated;
+      }
     },
     [state.isMuted, generateSpeech]
   );

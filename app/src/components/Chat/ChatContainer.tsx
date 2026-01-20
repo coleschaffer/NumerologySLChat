@@ -100,20 +100,24 @@ export default function ChatContainer() {
   const setTyping = useConversationStore((state) => state.setTyping);
 
   /**
-   * Speak oracle messages with two-pass approach:
-   * 1. Get estimated duration immediately
-   * 2. Start text animation with that duration
-   * 3. Audio fetches and plays in background (roughly syncs)
+   * Speak oracle messages with synced approach:
+   * 1. Show typing indicator while audio loads
+   * 2. When audio ready, start both audio AND text together
    */
   const speakOracleMessages = useCallback(
     async (contents: string[]) => {
       for (let i = 0; i < contents.length; i++) {
         const text = contents[i];
 
-        // speak() returns estimated duration immediately, fetches audio in background
-        const duration = speak(text);
+        // Show typing indicator while audio loads
+        setTyping(true);
 
-        // Add message with the estimated duration for typing animation
+        // Wait for audio to be ready - returns actual duration
+        const duration = await speak(text);
+
+        // Hide typing indicator, add message with actual duration
+        // Audio is already playing, text animation starts now (in sync!)
+        setTyping(false);
         addOracleMessageWithDuration(text, duration);
 
         // Wait for the animation to complete
@@ -125,7 +129,7 @@ export default function ChatContainer() {
         }
       }
     },
-    [speak, addOracleMessageWithDuration]
+    [speak, addOracleMessageWithDuration, setTyping]
   );
 
   /**
