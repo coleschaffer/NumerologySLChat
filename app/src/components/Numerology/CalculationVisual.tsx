@@ -1,125 +1,345 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
 import type { getLifePathCalculationSteps } from '@/lib/numerology';
 
 interface CalculationVisualProps {
   steps: ReturnType<typeof getLifePathCalculationSteps>;
 }
 
+/**
+ * CalculationVisual - Shows detailed numerology calculation breakdown
+ *
+ * Matches the design of CalculationAnimation with:
+ * - "✦ Decoding ✦" header
+ * - Card-based layout for Month/Day/Year
+ * - Intermediate reduction steps
+ * - Summation line
+ * - Pulsing result circle
+ */
 export default function CalculationVisual({ steps }: CalculationVisualProps) {
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.3,
-      },
-    },
-  };
+  const [visibleSteps, setVisibleSteps] = useState(0);
+  const [showSummation, setShowSummation] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+  const [showPulse, setShowPulse] = useState(false);
 
-  const itemVariants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: { opacity: 1, x: 0 },
-  };
+  // Generate floating particles
+  const particles = useMemo(() => {
+    return Array.from({ length: 15 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 3 + 1,
+      duration: Math.random() * 3 + 2,
+      delay: Math.random() * 2,
+    }));
+  }, []);
+
+  // Create step data from the calculation steps
+  const stepData = useMemo(() => {
+    const getIntermediate = (original: number, reduced: number): string | undefined => {
+      if (original <= 9) return undefined;
+      const digits = String(original).split('');
+      const sum = digits.reduce((a, b) => a + parseInt(b), 0);
+      if (sum === reduced) {
+        return `${digits.join(' + ')} = ${sum}`;
+      }
+      // If further reduction needed
+      return `${digits.join(' + ')} = ${sum}`;
+    };
+
+    return [
+      {
+        label: 'Month',
+        original: String(steps.month.original).padStart(2, '0'),
+        intermediate: getIntermediate(steps.month.original, steps.month.reduced),
+        final: String(steps.month.reduced),
+      },
+      {
+        label: 'Day',
+        original: String(steps.day.original).padStart(2, '0'),
+        intermediate: getIntermediate(steps.day.original, steps.day.reduced),
+        final: String(steps.day.reduced),
+      },
+      {
+        label: 'Year',
+        original: String(steps.year.original),
+        intermediate: (() => {
+          const digits = String(steps.year.original).split('');
+          const sum = digits.reduce((a, b) => a + parseInt(b), 0);
+          if (sum === steps.year.reduced) {
+            return `${digits.join(' + ')} = ${sum}`;
+          }
+          // Year needs further reduction
+          const sumDigits = String(sum).split('');
+          return `${digits.join(' + ')} = ${sum} → ${sumDigits.join(' + ')} = ${steps.year.reduced}`;
+        })(),
+        final: String(steps.year.reduced),
+      },
+    ];
+  }, [steps]);
+
+  useEffect(() => {
+    const stepDelay = 800; // Time between steps
+    const timers: NodeJS.Timeout[] = [];
+
+    // Show steps one by one
+    stepData.forEach((_, index) => {
+      const timer = setTimeout(() => {
+        setVisibleSteps(index + 1);
+      }, 500 + index * stepDelay);
+      timers.push(timer);
+    });
+
+    // Show summation
+    const summationTimer = setTimeout(() => {
+      setShowSummation(true);
+    }, 500 + stepData.length * stepDelay + 400);
+    timers.push(summationTimer);
+
+    // Show result
+    const resultTimer = setTimeout(() => {
+      setShowResult(true);
+    }, 500 + stepData.length * stepDelay + 800);
+    timers.push(resultTimer);
+
+    // Start pulse
+    const pulseTimer = setTimeout(() => {
+      setShowPulse(true);
+    }, 500 + stepData.length * stepDelay + 1200);
+    timers.push(pulseTimer);
+
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, [stepData]);
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="oracle-border rounded-xl px-6 py-5 max-w-sm w-full"
-    >
-      <motion.div
-        variants={itemVariants}
-        className="text-xs text-[#d4af37]/70 uppercase tracking-wider mb-4"
-      >
-        Decoding Your Birth Numbers
-      </motion.div>
-
-      <div className="space-y-3 font-mono text-sm">
-        {/* Month */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <span className="text-white/50 w-16">Month:</span>
-          <span className="text-white/80">{steps.month.original}</span>
-          <span className="text-[#d4af37]/50">→</span>
-          <span className="text-[#d4af37] glow-gold">{steps.month.reduced}</span>
-        </motion.div>
-
-        {/* Day */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <span className="text-white/50 w-16">Day:</span>
-          <span className="text-white/80">{steps.day.original}</span>
-          <span className="text-[#d4af37]/50">→</span>
-          <span className="text-[#d4af37] glow-gold">{steps.day.reduced}</span>
-        </motion.div>
-
-        {/* Year */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <span className="text-white/50 w-16">Year:</span>
-          <span className="text-white/80">{steps.year.original}</span>
-          <span className="text-[#d4af37]/50">→</span>
-          <span className="text-[#d4af37] glow-gold">{steps.year.reduced}</span>
-        </motion.div>
-
-        {/* Divider */}
-        <motion.div
-          variants={itemVariants}
-          className="border-t border-[#d4af37]/20 my-3"
-        />
-
-        {/* Sum */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3">
-          <span className="text-white/50 w-16">Sum:</span>
-          <span className="text-white/80">
-            {steps.month.reduced} + {steps.day.reduced} + {steps.year.reduced}
-          </span>
-          <span className="text-[#d4af37]/50">=</span>
-          <span className="text-[#d4af37]">{steps.sum}</span>
-        </motion.div>
-
-        {/* Final */}
-        {steps.sum !== steps.final && (
-          <motion.div variants={itemVariants} className="flex items-center gap-3">
-            <span className="text-white/50 w-16">Reduce:</span>
-            <span className="text-white/80">{steps.sum}</span>
-            <span className="text-[#d4af37]/50">→</span>
-            <motion.span
-              animate={{
-                textShadow: [
-                  '0 0 10px rgba(212, 175, 55, 0.5)',
-                  '0 0 20px rgba(212, 175, 55, 0.8)',
-                  '0 0 10px rgba(212, 175, 55, 0.5)',
-                ],
-              }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-              className="text-lg font-bold text-[#d4af37]"
-            >
-              {steps.final}
-            </motion.span>
-          </motion.div>
-        )}
-
-        {/* Life Path Label */}
-        <motion.div
-          variants={itemVariants}
-          className="mt-4 pt-3 border-t border-[#d4af37]/20 text-center"
-        >
-          <span className="text-[#d4af37]/70 text-xs uppercase tracking-wider">
-            Your Life Path Number
-          </span>
+    <div className="my-6 mx-auto max-w-md relative">
+      {/* Floating particles background */}
+      <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+        {particles.map((particle) => (
           <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 1.5, type: 'spring', stiffness: 200 }}
-            className="mt-2"
-          >
-            <span className="text-4xl font-bold text-[#d4af37] glow-gold">
-              {steps.final}
-            </span>
-          </motion.div>
-        </motion.div>
+            key={particle.id}
+            className="absolute rounded-full bg-[#d4af37]"
+            style={{
+              width: particle.size,
+              height: particle.size,
+              left: `${particle.x}%`,
+              top: `${particle.y}%`,
+            }}
+            animate={{
+              y: [0, -20, 0],
+              opacity: [0.2, 0.5, 0.2],
+              scale: [1, 1.2, 1],
+            }}
+            transition={{
+              duration: particle.duration,
+              delay: particle.delay,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
       </div>
-    </motion.div>
+
+      {/* Outer glow */}
+      <motion.div
+        className="absolute inset-0 rounded-2xl"
+        animate={{
+          boxShadow: [
+            '0 0 20px rgba(212, 175, 55, 0.1), inset 0 0 20px rgba(212, 175, 55, 0.05)',
+            '0 0 40px rgba(212, 175, 55, 0.15), inset 0 0 40px rgba(212, 175, 55, 0.08)',
+            '0 0 20px rgba(212, 175, 55, 0.1), inset 0 0 20px rgba(212, 175, 55, 0.05)',
+          ],
+        }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      <div className="relative bg-gradient-to-b from-[#0a0a1a]/90 to-[#1a0a2e]/90 backdrop-blur-sm rounded-2xl p-5 border border-[#d4af37]/30">
+        {/* Title */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-5"
+        >
+          <motion.div
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="text-xs text-[#d4af37]/60 uppercase tracking-[0.3em] mb-1"
+          >
+            ✦ Decoding ✦
+          </motion.div>
+          <h3
+            className="text-base font-medium text-[#d4af37] tracking-wider"
+            style={{ fontFamily: 'var(--font-cinzel), serif' }}
+          >
+            YOUR BIRTH NUMBERS
+          </h3>
+          <motion.div
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ delay: 0.3, duration: 0.5 }}
+            className="h-px bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent mt-3"
+          />
+        </motion.div>
+
+        {/* Steps */}
+        <div className="space-y-3">
+          <AnimatePresence mode="popLayout">
+            {stepData.slice(0, visibleSteps).map((step, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className="flex flex-col gap-1.5 p-3 rounded-lg bg-white/5 border border-[#d4af37]/20"
+              >
+                {/* Row 1: Label and original value */}
+                <div className="flex items-center justify-between">
+                  <span className="text-white/70 text-xs uppercase tracking-wider font-medium">
+                    {step.label}
+                  </span>
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                    className="font-mono text-white/90 text-base"
+                  >
+                    {step.original}
+                  </motion.span>
+                </div>
+
+                {/* Row 2: Intermediate calculation (if any) */}
+                {step.intermediate && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="flex items-center justify-end gap-2 text-xs"
+                  >
+                    <span className="text-white/40">reducing:</span>
+                    <span className="font-mono text-[#d4af37]/80">
+                      {step.intermediate}
+                    </span>
+                  </motion.div>
+                )}
+
+                {/* Row 3: Final result */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="flex items-center justify-end gap-2 pt-1 border-t border-[#d4af37]/10"
+                >
+                  <span className="text-white/40 text-xs uppercase">Reduces to</span>
+                  <motion.span
+                    initial={{ scale: 0.5 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.4, type: 'spring', stiffness: 200 }}
+                    className="font-mono text-[#d4af37] font-bold text-xl"
+                    style={{ textShadow: '0 0 8px rgba(212, 175, 55, 0.5)' }}
+                  >
+                    {step.final}
+                  </motion.span>
+                </motion.div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Summation divider */}
+        <AnimatePresence>
+          {showSummation && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4 }}
+              className="my-4 flex items-center justify-center gap-3"
+            >
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.4 }}
+                className="flex-1 h-px bg-gradient-to-r from-transparent via-[#d4af37]/50 to-[#d4af37]/50"
+              />
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="text-[#d4af37]/70 text-sm font-mono"
+              >
+                {steps.month.reduced} + {steps.day.reduced} + {steps.year.reduced} = {steps.sum}
+              </motion.span>
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.4 }}
+                className="flex-1 h-px bg-gradient-to-l from-transparent via-[#d4af37]/50 to-[#d4af37]/50"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Result */}
+        <AnimatePresence>
+          {showResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              className="text-center pt-2"
+            >
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="text-white/50 text-xs uppercase tracking-wider block mb-2"
+              >
+                Your Life Path Number
+              </motion.span>
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                className="relative inline-block"
+              >
+                <motion.div
+                  animate={
+                    showPulse
+                      ? {
+                          scale: [1, 1.08, 1],
+                          boxShadow: [
+                            '0 0 15px rgba(212, 175, 55, 0.3)',
+                            '0 0 40px rgba(212, 175, 55, 0.5)',
+                            '0 0 15px rgba(212, 175, 55, 0.3)',
+                          ],
+                        }
+                      : {}
+                  }
+                  transition={{
+                    duration: 2,
+                    repeat: showPulse ? Infinity : 0,
+                    ease: 'easeInOut',
+                  }}
+                  className="w-16 h-16 rounded-full border-2 border-[#d4af37] flex items-center justify-center
+                           bg-gradient-to-br from-[#d4af37]/20 to-[#d4af37]/5"
+                >
+                  <span
+                    className="text-3xl font-bold text-[#d4af37]"
+                    style={{
+                      textShadow: '0 0 15px rgba(212, 175, 55, 0.5)',
+                      fontFamily: 'var(--font-cinzel), serif',
+                    }}
+                  >
+                    {steps.final}
+                  </span>
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }
