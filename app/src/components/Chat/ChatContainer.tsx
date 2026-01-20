@@ -95,9 +95,9 @@ export default function ChatContainer() {
         const audioDuration = await speak(text);
         setTyping(false);
 
-        // Add 8% buffer to typing duration so text finishes with audio
-        // (accounts for slight audio playback delay after play() is called)
-        const bufferedAudioDuration = audioDuration * 1.08;
+        // Add 15% buffer to typing duration so text finishes with audio
+        // (accounts for audio playback delay and ensures text doesn't outpace voice)
+        const bufferedAudioDuration = audioDuration * 1.15;
         const estimatedTypingDuration = text.length * 60;
         const typingDuration = Math.max(bufferedAudioDuration, estimatedTypingDuration);
 
