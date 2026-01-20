@@ -95,9 +95,8 @@ export default function ChatContainer() {
         const audioDuration = await speak(text);
         setTyping(false);
 
-        // Add 15% buffer to typing duration so text finishes with audio
-        // (accounts for audio playback delay and ensures text doesn't outpace voice)
-        const bufferedAudioDuration = audioDuration * 1.15;
+        // Add 4% buffer to typing duration so text finishes with audio
+        const bufferedAudioDuration = audioDuration * 1.04;
         const estimatedTypingDuration = text.length * 60;
         const typingDuration = Math.max(bufferedAudioDuration, estimatedTypingDuration);
 
@@ -220,13 +219,14 @@ export default function ChatContainer() {
         return;
       }
 
-      setUserDOB(parseResult.date);
-      setPhase('revealing_birth_numbers');
+      try {
+        setUserDOB(parseResult.date);
+        setPhase('revealing_birth_numbers');
 
-      await speakOracleMessages([
-        "I see it now...",
-        "Let me calculate the vibrations hidden in your birth date...",
-      ]);
+        await speakOracleMessages([
+          "I see it now...",
+          "Let me calculate the vibrations hidden in your birth date...",
+        ]);
 
       // Show calculation animation
       setCalculationDOB(parseResult.date);
@@ -275,6 +275,25 @@ export default function ChatContainer() {
 
         setPhase('oracle_question_1');
         generateSuggestions("What aspect of your life feels most affected by this energy?");
+      } else {
+        console.error('[ChatContainer] No interpretation found for life path:', lifePath);
+        setShowCalculation(false);
+        // Fallback - continue anyway
+        await speakOracleMessages([
+          `Your Life Path Number is ${lifePath}.`,
+          "This number holds deep significance for your journey.",
+        ]);
+        setPhase('oracle_question_1');
+      }
+      } catch (error) {
+        console.error('[ChatContainer] Error in DOB handling:', error);
+        setShowCalculation(false);
+        setActiveVisualization(null);
+        await speakOracleMessages([
+          "I sense a disturbance in the connection...",
+          "Let us try again. When were you born?",
+        ]);
+        setPhase('collecting_dob');
       }
     }
 
