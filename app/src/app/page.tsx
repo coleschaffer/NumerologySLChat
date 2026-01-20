@@ -2,11 +2,15 @@
 
 import CosmosBackground from '@/components/Background/CosmosBackground';
 import ChatContainer from '@/components/Chat/ChatContainer';
+import { useConversationStore } from '@/store/conversationStore';
 
 export default function Home() {
+  // Get the user's Life Path number to personalize the cosmos
+  const lifePath = useConversationStore((state) => state.userProfile.lifePath);
+
   return (
     <main className="h-screen w-screen overflow-hidden relative">
-      <CosmosBackground />
+      <CosmosBackground personalizedNumber={lifePath} />
 
       {/* Header */}
       <header className="absolute top-0 left-0 right-0 z-10 px-6 py-4">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useConversationStore } from '@/store/conversationStore';
 import { getLifePathInterpretation } from '@/lib/interpretations';
@@ -14,6 +14,10 @@ import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
 import SuggestionCards from './SuggestionCards';
 import PaywallModal from '../Payment/PaywallModal';
+import CalculationAnimation, {
+  generateLifePathSteps,
+} from './CalculationAnimation';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 /**
  * ChatContainer - The main orchestrator for the Oracle chat experience
@@ -47,6 +51,9 @@ export default function ChatContainer() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
+  const [showCalculation, setShowCalculation] = useState(false);
+  const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
+  const { play: playSound, initialize: initializeAudio } = useSoundEffects();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -55,21 +62,47 @@ export default function ChatContainer() {
 
   // ============================================
   // PHASE 1: THE OPENING
-  // Goal: Hook immediately with intrigue
+  // Goal: Hook immediately with intrigue (Stefan Georgi style)
+  // Uses: Surprising claim, identification, mechanism tease
   // ============================================
   const startConversation = useCallback(async () => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
-    // Original opening - warm and intriguing
+    // Initialize audio on first interaction
+    initializeAudio();
+
+    // Start ambient sound
+    playSound('ambient');
+
+    // Improved opening - tension, curiosity, identification
     await addOracleMessages([
-      "I've been waiting for you...",
-      "Before we begin, I need to ask you something important.",
-      "When were you born?",
+      "You felt it, didn't you?",
+    ]);
+
+    // Strategic pause for effect
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    await addOracleMessages([
+      "That pull. That sense that something in your life is slightly... off.",
+      "Like you're following a script you didn't write.",
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    await addOracleMessages([
+      "There's a reason for that.",
+      "And it's hidden in the exact moment you took your first breath.",
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    await addOracleMessages([
+      "Tell me... when were you born?",
     ]);
 
     setPhase('collecting_dob');
-  }, [addOracleMessages, setPhase]);
+  }, [addOracleMessages, setPhase, initializeAudio, playSound]);
 
   // Start conversation on mount
   useEffect(() => {
@@ -110,18 +143,34 @@ export default function ChatContainer() {
       setUserDOB(parseResult.date);
       setPhase('first_reveal');
 
+      // Build anticipation
+      await addOracleMessages([
+        "I see it now...",
+        "Let me calculate the vibrations hidden in your birth date...",
+      ]);
+
+      // Show calculation animation
+      setCalculationDOB(parseResult.date);
+      setShowCalculation(true);
+
+      // Wait for calculation animation to complete (3.5s for animation + 1s for effect)
+      await new Promise((resolve) => setTimeout(resolve, 4500));
+
       const lifePath = useConversationStore.getState().userProfile.lifePath;
       const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
 
-      // Wait for calculation animation to complete
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-
       if (interp) {
+        // Hide calculation, show in messages
+        setShowCalculation(false);
+
+        // Play reveal sound
+        playSound('reveal');
+
         // REVEAL: Life Path Number (VSL moment - this is where they get hooked)
+        // Using Stefan Georgi's "Specificity + Flattery" technique
         await addOracleMessages([
-          `Your Life Path Number is ${lifePath}...`,
-          `You are "${interp.name}."`,
-          interp.shortDescription,
+          `Life Path ${lifePath}.`,
+          `${interp.name}.`,
         ]);
 
         // Show the number reveal component
@@ -131,11 +180,22 @@ export default function ChatContainer() {
           metadata: { number: lifePath! },
         });
 
-        // Flattering description + open loop for more
+        // Strategic pause
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Reframe a challenge as strength (Stefan Georgi technique)
         await addOracleMessages([
+          interp.shortDescription,
           interp.coreDescription,
-          "But this is only your surface number. Your TRUE nature lies deeper...",
-          "What is your full birth name? The name you were given at birth holds even more secrets.",
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        // Open loop for more
+        await addOracleMessages([
+          "But this is only your surface number.",
+          "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
+          "What is your full birth name?",
         ]);
 
         setPhase('collecting_name');
@@ -152,11 +212,36 @@ export default function ChatContainer() {
       const profile = useConversationStore.getState().userProfile;
       const firstName = trimmedValue.split(' ')[0]; // Use first name for intimacy
 
+      // Strategic pause - the Oracle is "processing"
+      await addOracleMessages([
+        `${firstName}...`,
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
       // REVEAL: Expression + Soul Urge (more value before asking for more)
       await addOracleMessages([
-        `${firstName}... I see the vibrations in your name clearly now.`,
-        `Your Expression Number is ${profile.expression}. This reveals your natural talents and the path you're meant to walk.`,
-        `Your Soul Urge is ${profile.soulUrge}. This is your deepest desire, the secret longing of your heart.`,
+        "The letters of your name carry vibrations I can now read clearly.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      // Chime for Expression reveal
+      playSound('chime');
+
+      await addOracleMessages([
+        `Your Expression Number is ${profile.expression}.`,
+        "This reveals your natural talents—the abilities you were born with, whether you've developed them yet or not.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Chime for Soul Urge reveal
+      playSound('chime');
+
+      await addOracleMessages([
+        `Your Soul Urge is ${profile.soulUrge}.`,
+        "This is your deepest desire. The secret longing that drives you, even when you don't consciously recognize it.",
       ]);
 
       setPhase('deeper_reveal');
@@ -164,12 +249,34 @@ export default function ChatContainer() {
       // Calculate personal year for added personalization
       const criticalDates = calculateCriticalDates(profile.dob!, profile.lifePath!);
 
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      // Pain point agitation (Stefan Georgi technique)
       await addOracleMessages([
-        "I see much about you now. The numbers paint a vivid picture.",
+        "I see much about you now, " + firstName + ".",
         `You are in a Personal Year ${criticalDates.personalYear}—a year of ${getPersonalYearTheme(criticalDates.personalYear)}.`,
-        "But there is something more I sense...",
-        "Is there someone in your life whose connection to you remains... unclear?",
-        "Tell me their name, and I will reveal what the numbers say about your bond.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      await addOracleMessages([
+        "But there is something else I sense...",
+        "Something I almost didn't want to tell you.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      await addOracleMessages([
+        "There's someone in your life right now...",
+        "Someone whose energy is affecting yours more than you realize.",
+        "For better... or for worse.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      await addOracleMessages([
+        "Do you know who I'm sensing?",
+        "Who keeps appearing in your thoughts?",
       ]);
 
       setPhase('relationship_hook');
@@ -222,12 +329,20 @@ export default function ChatContainer() {
       const interp2 = otherLifePath ? getLifePathInterpretation(otherLifePath) : null;
 
       if (otherLifePath && compat && interp1 && interp2) {
-        // COMPATIBILITY TEASE (VSL technique: show enough to create desire for more)
+        const userName = state.userProfile.fullName?.split(' ')[0] || 'you';
+
+        // COMPATIBILITY TEASE (VSL technique: partial reveal with stakes)
         await addOracleMessages([
-          `I see the numbers aligning between you and ${otherName}...`,
-          `You, ${interp1.name}, meeting ${interp2.name}.`,
-          "There are patterns here that require... careful examination.",
+          `I've seen your numbers alongside ${otherName}'s now.`,
         ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+
+        await addOracleMessages([
+          `${userName}, I need you to understand something...`,
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
         // Calculate critical dates for relationship
         const relDates = calculateCompatibilityCriticalDates(
@@ -237,21 +352,54 @@ export default function ChatContainer() {
           otherLifePath
         );
 
-        // Show partial info to build intrigue
+        // Chime for compatibility reveal
+        playSound('chime');
+
+        // Show the score but create curiosity about details
         await addOracleMessages([
-          `Your compatibility score is calculated...`,
-          `I see ${compat.level === 'high' ? 'strong harmony' : compat.level === 'moderate' ? 'interesting dynamics' : 'challenging energies'} between you.`,
-          relDates.length > 0
-            ? `I see THREE critical dates this year where your paths will intersect in meaningful ways...`
-            : `The numbers reveal significant moments ahead for you both...`,
-          "I can see the complete picture now.",
-          "The areas where you strengthen each other...",
-          "And the warnings I must share...",
+          `Your compatibility score is ${compat.score}%.`,
+          compat.score >= 70
+            ? "That's not low. There's real potential here."
+            : compat.score >= 50
+            ? "That's not low. But it's not simple either."
+            : "That's challenging. But not impossible.",
         ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Specific numbers create intrigue (VSL technique)
+        await addOracleMessages([
+          "I see THREE areas of harmony between you.",
+          "Connection points that could sustain you both through anything.",
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+
+        await addOracleMessages([
+          "But I also see TWO friction patterns.",
+          "Places where your numbers clash in ways that could slowly erode what you've built...",
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        if (relDates.length > 0) {
+          await addOracleMessages([
+            `And I see critical dates approaching—moments when your paths will intersect in meaningful ways...`,
+          ]);
+
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+
+        await addOracleMessages([
+          "I can see the complete picture now.",
+          "The harmony... and the warnings.",
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Email capture before paywall
         await addOracleMessages([
-          "Before I reveal all, I need a way to preserve this reading for you.",
+          "Before I reveal everything, I need a way to preserve this reading for you.",
           "Where should I send your complete numerology profile?",
         ]);
 
@@ -403,6 +551,15 @@ export default function ChatContainer() {
           </AnimatePresence>
 
           {isTyping && <TypingIndicator />}
+
+          {/* Calculation Animation */}
+          {showCalculation && calculationDOB && (
+            <CalculationAnimation
+              steps={generateLifePathSteps(calculationDOB)}
+              result={useConversationStore.getState().userProfile.lifePath || 0}
+              resultLabel="Your Life Path"
+            />
+          )}
 
           <div ref={messagesEndRef} />
         </div>
