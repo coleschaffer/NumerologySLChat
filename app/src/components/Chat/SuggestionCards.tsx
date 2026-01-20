@@ -15,45 +15,9 @@ interface SuggestionCardsProps {
   isLoading?: boolean;
 }
 
-/**
- * Fallback static suggestions for when dynamic suggestions aren't available
- */
-const staticSuggestionsByPhase: Partial<Record<ConversationPhase, string[]>> = {
-  oracle_question_1: [
-    'Tell me more about this number',
-    'What does this mean for my life?',
-    'I want to understand myself better',
-  ],
-  oracle_question_2: [
-    'What about my love life?',
-    'What career suits me?',
-    "What's blocking my success?",
-  ],
-  oracle_question_other_person: [
-    'Yes, someone keeps coming to mind',
-    'Skip for now',
-  ],
-  collecting_other_info: [],
-  oracle_question_relationship: [
-    'Tell me about our connection',
-    'What challenges do we face?',
-    'Is this meant to be?',
-  ],
-  oracle_final_question: [
-    'Show me my complete reading',
-    'What else can you reveal?',
-  ],
-  paywall: [
-    'Unlock My Complete Reading',
-    'Reveal Our Compatibility',
-    'Maybe later',
-  ],
-  paid_reading: [
-    'Tell me about my year ahead',
-    'What about another person?',
-    'Explain my soul urge',
-  ],
-};
+// Note: Dynamic suggestions are always preferred
+// These are only used as absolute fallbacks when AI fails
+// The useDynamicSuggestions hook has contextual fallbacks that should be used first
 
 export default function SuggestionCards({
   phase,
@@ -68,10 +32,9 @@ export default function SuggestionCards({
     return null;
   }
 
-  // Use dynamic suggestions if available, otherwise fall back to static
-  const suggestions = dynamicSuggestions && dynamicSuggestions.length > 0
-    ? dynamicSuggestions
-    : staticSuggestionsByPhase[phase] || [];
+  // Use dynamic suggestions - these should always be provided by the hook
+  // which handles both AI-generated and contextual fallbacks
+  const suggestions = dynamicSuggestions || [];
 
   if (suggestions.length === 0 && !isLoading) return null;
 

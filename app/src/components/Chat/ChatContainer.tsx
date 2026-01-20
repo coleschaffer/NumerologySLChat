@@ -67,6 +67,9 @@ export default function ChatContainer() {
   const [showCalculation, setShowCalculation] = useState(false);
   const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
   const [activeVisualization, setActiveVisualization] = useState<'constellation' | 'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
+  // Separate state to control overlay constellation visibility
+  const [showConstellationOverlay, setShowConstellationOverlay] = useState(false);
+  const [constellationNumber, setConstellationNumber] = useState<number | null>(null);
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
   const { speak, state: voiceState, toggleMute: toggleVoiceMute } = useVoiceover();
 
@@ -295,8 +298,9 @@ export default function ChatContainer() {
         setShowCalculation(false);
         playSound('reveal');
 
-        // Show constellation reveal - keep it visible throughout
-        setActiveVisualization('constellation');
+        // Show constellation reveal as fixed overlay - persists throughout explanation
+        setConstellationNumber(lifePath);
+        setShowConstellationOverlay(true);
 
         await speakOracleMessages([
           `Life Path ${lifePath}.`,
@@ -314,7 +318,7 @@ export default function ChatContainer() {
         ]);
 
         // Fade out constellation after explanation
-        setActiveVisualization(null);
+        setShowConstellationOverlay(false);
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -811,6 +815,18 @@ export default function ChatContainer() {
 
   return (
     <div className="flex flex-col h-full relative">
+      {/* Fixed Constellation Overlay - stays in center of screen */}
+      <AnimatePresence>
+        {showConstellationOverlay && constellationNumber && (
+          <ConstellationReveal
+            number={constellationNumber}
+            label="Life Path"
+            isOverlay={true}
+            persist={true}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Audio Controls */}
       <div className="absolute top-2 right-4 z-20 flex gap-2">
         {/* Voice Mute Button */}
@@ -876,14 +892,7 @@ export default function ChatContainer() {
             />
           )}
 
-          {/* Visualization Components */}
-          {activeVisualization === 'constellation' && userProfile.lifePath && (
-            <ConstellationReveal
-              number={userProfile.lifePath}
-              label="Life Path"
-            />
-          )}
-
+          {/* Visualization Components (inline with chat) */}
           {activeVisualization === 'sacred-geometry' && userProfile.lifePath && (
             <SacredGeometryReveal
               number={userProfile.lifePath}

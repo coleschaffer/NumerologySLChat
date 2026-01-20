@@ -30,48 +30,51 @@ interface UseDynamicSuggestionsReturn extends DynamicSuggestionsState {
 
 /**
  * Fallback suggestions for each phase when API is unavailable
- * These should match the specific Oracle question for each phase
+ * These MUST directly answer the specific Oracle question for each phase
+ * NOT follow-up questions - these are ANSWERS the user might give
  */
 const fallbackSuggestions: Partial<Record<ConversationPhase, string[]>> = {
-  // "What aspect of your life feels most affected by this energy?"
+  // Oracle asks: "What aspect of your life feels most affected by this energy?"
   oracle_question_1: [
     'My relationships feel most affected',
-    'My career and purpose',
-    'My sense of inner peace',
+    'My career and sense of purpose',
+    'My inner peace and confidence',
   ],
-  // "Have you ever felt drawn to certain skills or abilities?"
+  // Oracle asks: "Have you ever felt drawn to certain skills or abilities?"
   oracle_question_2: [
-    'Yes, creativity and expression',
-    'Leadership and guiding others',
-    "I've always been intuitive",
+    'Yes, creativity and self-expression',
+    'Leadership and inspiring others',
+    'Intuition and understanding people',
   ],
-  // "Who keeps appearing in your thoughts?"
+  // Oracle asks: "Who keeps appearing in your thoughts?"
   oracle_question_other_person: [
     'Someone I care about deeply',
     'A romantic connection',
     "I'd rather focus on myself",
   ],
-  // "What draws you to understand this connection?"
+  // Oracle asks: "What draws you to understand this connection?"
   oracle_question_relationship: [
-    "I want to understand us better",
-    'There is tension I can\'t explain',
-    'I feel a deep bond',
+    'I want to understand us better',
+    "There's tension I can't explain",
+    'I feel drawn to them strongly',
   ],
-  // "What is the one question burning in your heart?"
+  // Oracle asks: "What is the one question burning in your heart?"
   oracle_final_question: [
     'Will I find true love?',
     'Am I on the right path?',
-    'What is my purpose?',
+    'What is my true purpose?',
   ],
+  // Paywall - these are action buttons, not answers
   paywall: [
     'Unlock My Complete Reading',
     'Reveal Our Compatibility',
     'Maybe later',
   ],
+  // Post-paywall reading questions
   paid_reading: [
     'Tell me about my year ahead',
-    'What about another person?',
-    'Explain my soul urge',
+    'Reveal more about my soul urge',
+    'What challenges await me?',
   ],
 };
 

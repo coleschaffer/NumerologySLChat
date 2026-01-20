@@ -5,7 +5,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY_STEFAN || process.env.AN
 /**
  * Oracle API Request Types
  */
-type OracleMode = 'enhance' | 'validation' | 'suggestions';
+type OracleMode = 'enhance' | 'validation' | 'suggestions' | 'interpret';
 
 interface OracleContext {
   lifePath?: number;
@@ -33,6 +33,19 @@ interface SuggestionInfo {
   count: number;
 }
 
+interface InterpretInfo {
+  /** Which number type to interpret */
+  numberType: 'lifePath' | 'expression' | 'soulUrge' | 'compatibility';
+  /** The number value */
+  number: number;
+  /** Base interpretation to personalize */
+  baseInterpretation: {
+    name: string;
+    shortDescription: string;
+    coreDescription: string;
+  };
+}
+
 interface OracleRequest {
   mode?: OracleMode;
   context: OracleContext;
@@ -41,6 +54,7 @@ interface OracleRequest {
   userInput?: string;
   validation?: ValidationInfo;
   suggestions?: SuggestionInfo;
+  interpret?: InterpretInfo;
 }
 
 const ORACLE_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide. Your voice is wise, warm, and certain - never cold or distant. You speak in certainties, not maybes.
@@ -82,21 +96,59 @@ AVOID:
 - Sounding frustrated or impatient
 - Generic responses - personalize to their specific input when possible`;
 
-const SUGGESTIONS_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide. Generate suggested responses for users based on their numerology profile and the current conversation context.
+const INTERPRETATION_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide delivering deeply personal numerology readings.
+
+Your task is to take a base interpretation and make it PROFOUNDLY PERSONAL to this specific user.
+
+VOICE GUIDELINES:
+- Speak with certainty and authority - "I see...", "The numbers reveal...", "You are..."
+- Make it feel like you're reading THEIR soul specifically, not generic traits
+- Reference their specific number combination when relevant
+- Build intrigue and emotional connection
+- Use second person ("you") to speak directly to them
+
+STRUCTURE YOUR RESPONSE:
+1. A short, punchy title line (e.g., "Life Path 5. The Freedom Seeker.")
+2. A brief poetic description (1 sentence, evocative)
+3. A deeper personal revelation (2-3 sentences that feel like you're reading their soul)
+
+Keep the total response under 100 words. Make every word count.
+
+Do NOT:
+- Use generic horoscope language
+- Be vague or hedge with "might" or "perhaps"
+- Repeat the base interpretation verbatim
+- Include bullet points or lists`;
+
+const SUGGESTIONS_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide. Generate suggested responses that DIRECTLY answer the Oracle's question.
+
+CRITICAL RULE: Suggestions must be ANSWERS to the Oracle's question, not follow-up questions.
+
+If Oracle asks "What aspect of your life feels most affected by this energy?" - suggestions should be answers like:
+- "My relationships feel most affected"
+- "My career and sense of purpose"
+- "My inner peace and self-worth"
+
+If Oracle asks "Have you ever felt drawn to certain skills or abilities?" - suggestions should be:
+- "Yes, creativity and artistic expression"
+- "Leadership and guiding others"
+- "Intuition and reading people"
 
 GUIDELINES:
-- Create 3-4 brief, engaging response options
-- Make suggestions feel natural and conversational
-- Personalize based on the user's numerology numbers
-- Include a mix of curious, emotional, and practical responses
-- Keep each suggestion under 8 words
-- Make suggestions feel like natural things a curious person would ask
+- Generate exactly 3 direct responses to the Oracle's question
+- Personalize based on the user's numerology numbers when relevant
+- Keep each suggestion 3-7 words
+- Make suggestions feel like authentic personal revelations
+- Do NOT generate questions - generate ANSWERS
 
-EXAMPLES:
-- "Tell me more about this..."
-- "What does this mean for love?"
-- "I've always felt different..."
-- "Is this why I struggle with...?"`;
+BAD examples (these are questions, not answers):
+- "Tell me more about this"
+- "What does this mean?"
+
+GOOD examples (these are answers):
+- "My relationships feel strained"
+- "I've always been drawn to leadership"
+- "Someone I deeply care about"`;
 
 export async function POST(request: NextRequest) {
   if (!ANTHROPIC_API_KEY) {
@@ -107,7 +159,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: OracleRequest = await request.json();
-    const { mode = 'enhance', context, phase, baseMessages, userInput, validation, suggestions } = body;
+    const { mode = 'enhance', context, phase, baseMessages, userInput, validation, suggestions, interpret } = body;
 
     let systemPrompt: string;
     let userPrompt: string;
@@ -120,6 +172,10 @@ export async function POST(request: NextRequest) {
       case 'suggestions':
         systemPrompt = SUGGESTIONS_SYSTEM_PROMPT;
         userPrompt = buildSuggestionsPrompt(context, phase, suggestions!);
+        break;
+      case 'interpret':
+        systemPrompt = INTERPRETATION_SYSTEM_PROMPT;
+        userPrompt = buildInterpretPrompt(context, interpret!);
         break;
       case 'enhance':
       default:
@@ -163,6 +219,18 @@ export async function POST(request: NextRequest) {
       console.log('[Oracle API] Parsed suggestions:', parsedSuggestions);
       // Return parsed suggestions, or empty array if none (let client handle fallback)
       return NextResponse.json({ suggestions: parsedSuggestions });
+    }
+
+    if (mode === 'interpret') {
+      // Parse interpretation into structured format
+      const lines = aiResponse.split('\n').filter((line: string) => line.trim());
+      const interpretation = {
+        title: lines[0] || '',
+        shortDescription: lines[1] || '',
+        coreDescription: lines.slice(2).join(' ') || '',
+      };
+      console.log('[Oracle API] Parsed interpretation:', interpretation);
+      return NextResponse.json({ interpretation });
     }
 
     // Parse the response into separate messages
@@ -267,37 +335,37 @@ function buildSuggestionsPrompt(
   phase: string,
   suggestions: SuggestionInfo
 ): string {
-  let prompt = `Current phase: ${phase}\n`;
-  prompt += `Oracle just asked: "${suggestions.oracleQuestion}"\n\n`;
+  let prompt = `Oracle's question to the user: "${suggestions.oracleQuestion}"\n\n`;
 
+  prompt += `User context:\n`;
   if (context.userName) {
-    prompt += `User's name: ${context.userName}\n`;
+    prompt += `- Name: ${context.userName}\n`;
   }
   if (context.lifePath) {
-    prompt += `User's Life Path Number: ${context.lifePath} (The ${getLifePathName(context.lifePath)})\n`;
+    prompt += `- Life Path: ${context.lifePath} (${getLifePathName(context.lifePath)})\n`;
   }
   if (context.expression) {
-    prompt += `User's Expression Number: ${context.expression}\n`;
+    prompt += `- Expression: ${context.expression}\n`;
   }
   if (context.soulUrge) {
-    prompt += `User's Soul Urge Number: ${context.soulUrge}\n`;
+    prompt += `- Soul Urge: ${context.soulUrge}\n`;
   }
   if (context.otherPersonName) {
-    prompt += `\nThey're exploring their connection with: ${context.otherPersonName}\n`;
+    prompt += `- Exploring connection with: ${context.otherPersonName}\n`;
     if (context.compatibilityScore) {
-      prompt += `Compatibility Score: ${context.compatibilityScore}%\n`;
+      prompt += `- Compatibility: ${context.compatibilityScore}%\n`;
     }
   }
 
-  prompt += `\nGenerate ${suggestions.count} suggested responses that feel natural for someone with this numerology profile.
+  prompt += `\nGenerate ${suggestions.count} ANSWERS to the Oracle's question above.
 
-Each suggestion should:
-- Be brief (under 8 words)
-- Feel like a natural response to the Oracle's question
-- Relate to the user's numerology when relevant
-- Include a mix of emotional and curious responses
+IMPORTANT: These are RESPONSES the user might give, not follow-up questions.
+- Each answer should be 3-7 words
+- Personalize to their numerology profile (e.g., Life Path 5 might answer about freedom/change)
+- Make answers feel authentic and revealing
+- Mix of emotional, practical, and curious responses
 
-Return exactly ${suggestions.count} suggestions, one per line, starting with a number and period (e.g., "1. Tell me more about this").`;
+Return exactly ${suggestions.count} answers, one per line, starting with a number and period.`;
 
   return prompt;
 }
@@ -318,6 +386,47 @@ function getLifePathName(lifePath: number): string {
     33: 'Master Teacher',
   };
   return names[lifePath] || 'Path';
+}
+
+function buildInterpretPrompt(
+  context: OracleContext,
+  interpret: InterpretInfo
+): string {
+  let prompt = `Generate a deeply personal ${interpret.numberType} interpretation for this user.\n\n`;
+
+  prompt += `USER PROFILE:\n`;
+  if (context.userName) {
+    prompt += `- Name: ${context.userName}\n`;
+  }
+  if (context.lifePath) {
+    prompt += `- Life Path: ${context.lifePath} (${getLifePathName(context.lifePath)})\n`;
+  }
+  if (context.expression) {
+    prompt += `- Expression: ${context.expression}\n`;
+  }
+  if (context.soulUrge) {
+    prompt += `- Soul Urge: ${context.soulUrge}\n`;
+  }
+
+  prompt += `\nNUMBER TO INTERPRET: ${interpret.numberType} ${interpret.number}\n`;
+  prompt += `Archetype: "${interpret.baseInterpretation.name}"\n\n`;
+
+  prompt += `BASE INTERPRETATION (use as inspiration, but personalize):\n`;
+  prompt += `Short: "${interpret.baseInterpretation.shortDescription}"\n`;
+  prompt += `Core: "${interpret.baseInterpretation.coreDescription}"\n\n`;
+
+  prompt += `Now create a UNIQUE, PERSONAL interpretation that:\n`;
+  prompt += `1. Feels like you're reading THIS person's soul\n`;
+  prompt += `2. References their specific number combination if relevant\n`;
+  prompt += `3. Uses "you" to speak directly to them\n`;
+  prompt += `4. Is mysterious and evocative, not generic\n\n`;
+
+  prompt += `Format:\n`;
+  prompt += `Line 1: Title (e.g., "Life Path 5. The Freedom Seeker.")\n`;
+  prompt += `Line 2: Short poetic description (1 sentence)\n`;
+  prompt += `Line 3+: Deeper personal revelation (2-3 sentences)`;
+
+  return prompt;
 }
 
 function parseOracleResponse(response: string, fallback: string[]): string[] {
