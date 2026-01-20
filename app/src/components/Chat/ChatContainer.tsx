@@ -26,9 +26,6 @@ import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
 import SuggestionCards from './SuggestionCards';
 import PaywallModal from '../Payment/PaywallModal';
-import CalculationAnimation, {
-  generateLifePathSteps,
-} from './CalculationAnimation';
 import ConstellationReveal from '../Numerology/ConstellationReveal';
 import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
 import LetterTransform from '../Numerology/LetterTransform';
@@ -72,11 +69,9 @@ export default function ChatContainer() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
-  const [showCalculation, setShowCalculation] = useState(false);
-  const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
-  const [activeVisualization, setActiveVisualization] = useState<'constellation' | 'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
-  // Separate state to control overlay constellation visibility
-  const [showConstellationOverlay, setShowConstellationOverlay] = useState(false);
+  const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
+  // Inline constellation (stays in chat, scrolls with messages)
+  const [showInlineConstellation, setShowInlineConstellation] = useState(false);
   const [constellationNumber, setConstellationNumber] = useState<number | null>(null);
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
   const { speak, state: voiceState, toggleMute: toggleVoiceMute } = useVoiceover();
@@ -292,90 +287,81 @@ export default function ChatContainer() {
 
         await speakOracleMessages([
           "I see it now...",
-          "Let me calculate the vibrations hidden in your birth date...",
+          "The vibrations hidden in your birth date are becoming clear...",
         ]);
 
-      // Show calculation animation - allow time for the slower, more detailed animation
-      setCalculationDOB(parseResult.date);
-      setShowCalculation(true);
+        // Brief pause for anticipation
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Wait longer for the comprehensive calculation display (3 steps x 1.8s + pauses)
-      await new Promise((resolve) => setTimeout(resolve, 9000));
+        const lifePath = useConversationStore.getState().userProfile.lifePath;
+        const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
 
-      const lifePath = useConversationStore.getState().userProfile.lifePath;
-      const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
+        if (interp) {
+          playSound('reveal');
 
-      if (interp) {
-        // Keep calculation animation visible - it will fade out with the constellation
-        playSound('reveal');
+          // Show constellation inline with chat - it will persist
+          setConstellationNumber(lifePath);
+          setShowInlineConstellation(true);
 
-        // Show constellation reveal as fixed overlay - persists throughout explanation
-        setConstellationNumber(lifePath);
-        setShowConstellationOverlay(true);
-
-        // Get AI-personalized interpretation
-        const aiResult = lifePath ? await getInterpretation('lifePath', lifePath, {
-          userName: useConversationStore.getState().userProfile.fullName || undefined,
-          lifePath,
-        }) : null;
-
-        const interpretation = aiResult?.interpretation || {
-          title: `Life Path ${lifePath}. ${interp.name}.`,
-          shortDescription: interp.shortDescription,
-          coreDescription: interp.coreDescription,
-        };
-
-        // Split title into two messages for dramatic effect
-        const titleParts = interpretation.title.split('. ').filter(Boolean);
-        await speakOracleMessages(titleParts.map(p => p.endsWith('.') ? p : `${p}.`));
-
-        // Keep constellation visible while Oracle explains
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        setPhase('revealing_life_path');
-
-        await speakOracleMessages([
-          interpretation.shortDescription,
-          interpretation.coreDescription,
-        ]);
-
-        // Fade out constellation and calculation animation after explanation
-        setShowConstellationOverlay(false);
-        setShowCalculation(false);
-
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // First Oracle question - personalized based on life path
-        const question1 = await getAITransition(
-          'revealing_life_path',
-          'oracle_question_1',
-          {
-            userName: userProfile.fullName,
+          // Get AI-personalized interpretation
+          const aiResult = lifePath ? await getInterpretation('lifePath', lifePath, {
+            userName: useConversationStore.getState().userProfile.fullName || undefined,
             lifePath,
-          },
-          [
-            "Does this resonate with you?",
-            "What aspect of your life feels most affected by this energy?",
-          ]
-        );
+          }) : null;
 
-        await speakOracleMessages(question1);
+          const interpretation = aiResult?.interpretation || {
+            title: `Life Path ${lifePath}. ${interp.name}.`,
+            shortDescription: interp.shortDescription,
+            coreDescription: interp.coreDescription,
+          };
 
-        setPhase('oracle_question_1');
-        generateSuggestions(question1[question1.length - 1] || "What aspect of your life feels most affected by this energy?");
-      } else {
-        console.error('[ChatContainer] No interpretation found for life path:', lifePath);
-        setShowCalculation(false);
-        // Fallback - continue anyway
-        await speakOracleMessages([
-          `Your Life Path Number is ${lifePath}.`,
-          "This number holds deep significance for your journey.",
-        ]);
-        setPhase('oracle_question_1');
-      }
+          // Split title into two messages for dramatic effect
+          const titleParts = interpretation.title.split('. ').filter(Boolean);
+          await speakOracleMessages(titleParts.map(p => p.endsWith('.') ? p : `${p}.`));
+
+          // Let constellation animation complete
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+
+          setPhase('revealing_life_path');
+
+          await speakOracleMessages([
+            interpretation.shortDescription,
+            interpretation.coreDescription,
+          ]);
+
+          await new Promise((resolve) => setTimeout(resolve, 800));
+
+          // IMPORTANT: Always end with a question before showing input
+          const question1 = await getAITransition(
+            'revealing_life_path',
+            'oracle_question_1',
+            {
+              userName: userProfile.fullName,
+              lifePath,
+            },
+            [
+              "Does this resonate with you?",
+              "What aspect of your life feels most affected by this energy?",
+            ]
+          );
+
+          await speakOracleMessages(question1);
+
+          setPhase('oracle_question_1');
+          generateSuggestions(question1[question1.length - 1] || "What aspect of your life feels most affected by this energy?");
+        } else {
+          console.error('[ChatContainer] No interpretation found for life path:', lifePath);
+          // Fallback - still ask a question before showing input
+          await speakOracleMessages([
+            `Your Life Path Number is ${lifePath}.`,
+            "This number holds deep significance for your journey.",
+            "Does this resonate with what you've experienced in your life?",
+          ]);
+          setPhase('oracle_question_1');
+          generateSuggestions("Does this resonate with what you've experienced?");
+        }
       } catch (error) {
         console.error('[ChatContainer] Error in DOB handling:', error);
-        setShowCalculation(false);
         setActiveVisualization(null);
         await speakOracleMessages([
           "I sense a disturbance in the connection...",
@@ -998,18 +984,6 @@ export default function ChatContainer() {
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Fixed Constellation Overlay - stays in center of screen */}
-      <AnimatePresence>
-        {showConstellationOverlay && constellationNumber && (
-          <ConstellationReveal
-            number={constellationNumber}
-            label="Life Path"
-            isOverlay={true}
-            persist={true}
-          />
-        )}
-      </AnimatePresence>
-
       {/* Audio Controls */}
       <div className="absolute top-2 right-4 z-20 flex gap-2">
         {/* Voice Mute Button */}
@@ -1066,12 +1040,13 @@ export default function ChatContainer() {
 
           {isTyping && <TypingIndicator />}
 
-          {/* Calculation Animation */}
-          {showCalculation && calculationDOB && (
-            <CalculationAnimation
-              steps={generateLifePathSteps(calculationDOB)}
-              result={useConversationStore.getState().userProfile.lifePath || 0}
-              resultLabel="Your Life Path"
+          {/* Constellation Reveal - inline with chat, persists */}
+          {showInlineConstellation && constellationNumber && (
+            <ConstellationReveal
+              number={constellationNumber}
+              label="Life Path"
+              isOverlay={false}
+              persist={true}
             />
           )}
 

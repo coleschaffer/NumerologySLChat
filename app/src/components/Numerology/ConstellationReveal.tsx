@@ -312,11 +312,11 @@ export default function ConstellationReveal({
 
   const containerClasses = isOverlay
     ? "fixed inset-0 z-40 flex items-center justify-center pointer-events-none"
-    : "relative w-full max-w-xs mx-auto aspect-square";
+    : "my-8 mx-auto max-w-xs relative";
 
   const innerClasses = isOverlay
     ? "w-[min(80vw,400px)] aspect-square relative"
-    : "w-full h-full relative";
+    : "w-full aspect-square relative";
 
   return (
     <div className={containerClasses}>
