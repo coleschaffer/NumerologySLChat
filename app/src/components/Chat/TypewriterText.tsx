@@ -82,30 +82,37 @@ export default function TypewriterText({
         setDisplayedText(text.slice(0, indexRef.current + 1));
         indexRef.current += 1;
 
-        // Add slight variance for natural feel (±20%)
-        const variance = charDelay * 0.2 * (Math.random() - 0.5);
-        const nextDelay = Math.max(10, charDelay + variance);
+        // When syncing with audio (duration provided), use consistent timing
+        // When not syncing (no duration), add slight variance for natural feel
+        let nextDelay: number;
+        if (duration) {
+          // Consistent timing to stay in sync with audio
+          nextDelay = charDelay;
+        } else {
+          // Add slight variance for natural feel (±15%)
+          const variance = charDelay * 0.15 * (Math.random() - 0.5);
+          nextDelay = Math.max(10, charDelay + variance);
 
-        // Longer pause after punctuation
-        const currentChar = text[indexRef.current - 1];
-        const punctuationPause =
-          currentChar === '.' || currentChar === '!' || currentChar === '?'
-            ? 300
-            : currentChar === ','
-            ? 150
-            : currentChar === '...'
-            ? 400
-            : 0;
+          // Longer pause after punctuation (only when not syncing with audio)
+          const currentChar = text[indexRef.current - 1];
+          const punctuationPause =
+            currentChar === '.' || currentChar === '!' || currentChar === '?'
+              ? 200
+              : currentChar === ','
+              ? 100
+              : 0;
+          nextDelay += punctuationPause;
+        }
 
-        timeoutRef.current = setTimeout(typeNextChar, nextDelay + punctuationPause);
+        timeoutRef.current = setTimeout(typeNextChar, nextDelay);
       } else {
         setIsComplete(true);
         onCompleteRef.current?.();
       }
     };
 
-    // Start typing after a brief delay
-    timeoutRef.current = setTimeout(typeNextChar, 100);
+    // Start typing immediately (no delay - sync with audio)
+    typeNextChar();
 
     return () => {
       if (timeoutRef.current) {

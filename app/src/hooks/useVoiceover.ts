@@ -109,7 +109,8 @@ export function useVoiceover(): UseVoiceoverReturn {
     return URL.createObjectURL(blob);
   }, []);
 
-  // Speak text and return promise that resolves with duration
+  // Speak text - generates audio, starts playback, and returns duration immediately
+  // This allows the caller to start typing animation in sync with audio
   const speak = useCallback(
     async (text: string): Promise<number> => {
       console.log('[Voiceover] speak() called for:', text.substring(0, 30) + '...');
@@ -131,7 +132,9 @@ export function useVoiceover(): UseVoiceoverReturn {
         const audioUrl = await generateSpeech(text);
         console.log('[Voiceover] Audio URL generated:', audioUrl);
 
-        return new Promise((resolve, reject) => {
+        // Return a promise that resolves with duration once audio is ready to play
+        // (not when it ends - we want to start typing in sync)
+        return new Promise((resolve) => {
           if (!audioRef.current) {
             resolve(estimateDuration(text));
             return;
@@ -146,7 +149,6 @@ export function useVoiceover(): UseVoiceoverReturn {
               isPlaying: false,
               currentText: null,
             }));
-            resolve(audio.duration * 1000);
           };
 
           const handleError = (e: Event) => {
@@ -158,23 +160,30 @@ export function useVoiceover(): UseVoiceoverReturn {
               isLoading: false,
               error: 'Playback failed',
             }));
-            // Still resolve with estimated duration so typing continues
-            resolve(estimateDuration(text));
           };
 
           const handleCanPlay = () => {
-            console.log('[Voiceover] Audio can play, starting playback...');
+            console.log('[Voiceover] Audio can play, duration:', audio.duration);
             setState((prev) => ({
               ...prev,
               isLoading: false,
               isPlaying: true,
               currentText: text,
             }));
+
+            // Get actual duration before starting playback
+            const actualDuration = audio.duration * 1000;
+
             audio.play()
-              .then(() => console.log('[Voiceover] Playback started successfully'))
+              .then(() => {
+                console.log('[Voiceover] Playback started successfully');
+                // Resolve immediately with duration so typing can start in sync
+                resolve(actualDuration);
+              })
               .catch((e) => {
                 console.error('[Voiceover] Playback failed:', e);
                 handleError(e);
+                resolve(estimateDuration(text));
               });
           };
 
@@ -182,7 +191,8 @@ export function useVoiceover(): UseVoiceoverReturn {
             audio.removeEventListener('ended', handleEnded);
             audio.removeEventListener('error', handleError);
             audio.removeEventListener('canplaythrough', handleCanPlay);
-            URL.revokeObjectURL(audioUrl);
+            // Don't revoke URL immediately - audio still needs it
+            setTimeout(() => URL.revokeObjectURL(audioUrl), 60000);
           };
 
           audio.addEventListener('ended', handleEnded);
