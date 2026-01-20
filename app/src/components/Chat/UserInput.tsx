@@ -6,22 +6,15 @@ import type { ConversationPhase } from '@/store/conversationStore';
 
 interface UserInputProps {
   phase: ConversationPhase;
-  onSubmit: (value: string | Date) => void;
+  onSubmit: (value: string) => void;
   disabled?: boolean;
 }
 
 export default function UserInput({ phase, onSubmit, disabled }: UserInputProps) {
   const [textValue, setTextValue] = useState('');
-  const [dateValue, setDateValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Determine input type based on phase
-  const isDateInput =
-    phase === 'collecting_dob' || phase === 'collecting_other_dob';
-  const isNameInput =
-    phase === 'collecting_name' || phase === 'collecting_other_name';
-  const isEmailInput = phase === 'collecting_email';
-
+  // Focus input when phase changes and not disabled
   useEffect(() => {
     if (!disabled && inputRef.current) {
       inputRef.current.focus();
@@ -30,28 +23,22 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (disabled) return;
+    if (disabled || !textValue.trim()) return;
 
-    if (isDateInput && dateValue) {
-      const date = new Date(dateValue + 'T12:00:00');
-      onSubmit(date);
-      setDateValue('');
-    } else if (textValue.trim()) {
-      onSubmit(textValue.trim());
-      setTextValue('');
-    }
+    onSubmit(textValue.trim());
+    setTextValue('');
   };
 
   const getPlaceholder = () => {
     switch (phase) {
       case 'collecting_dob':
-        return 'Select your birth date';
+        return 'Type your birthday (e.g., March 15, 1990)...';
       case 'collecting_name':
         return 'Enter your full birth name...';
       case 'collecting_other_name':
         return 'Enter their name...';
       case 'collecting_other_dob':
-        return 'Select their birth date';
+        return 'Type their birthday...';
       case 'relationship_hook':
         return "Enter someone's name...";
       case 'collecting_email':
@@ -61,7 +48,12 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
     }
   };
 
-  // Hide input during certain phases
+  const getInputType = () => {
+    if (phase === 'collecting_email') return 'email';
+    return 'text';
+  };
+
+  // Hide input during certain phases (Oracle is speaking / paywall)
   const hideInput =
     phase === 'opening' ||
     phase === 'first_reveal' ||
@@ -71,6 +63,8 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
     phase === 'personal_paywall';
 
   if (hideInput) return null;
+
+  const isDatePhase = phase === 'collecting_dob' || phase === 'collecting_other_dob';
 
   return (
     <AnimatePresence>
@@ -82,55 +76,24 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
         className="px-4 py-4"
       >
         <div className="flex gap-3 max-w-2xl mx-auto">
-          {isDateInput ? (
-            <div className="flex-1 relative">
-              <input
-                ref={inputRef}
-                type="date"
-                value={dateValue}
-                onChange={(e) => setDateValue(e.target.value)}
-                disabled={disabled}
-                max={new Date().toISOString().split('T')[0]}
-                min="1900-01-01"
-                className="w-full px-5 py-3.5 rounded-full bg-white/5 border border-[#d4af37]/30
-                         text-white placeholder-white/40 focus:outline-none focus:border-[#d4af37]/60
-                         focus:ring-2 focus:ring-[#d4af37]/20 transition-all disabled:opacity-50
-                         [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50
-                         [&::-webkit-calendar-picker-indicator]:hover:opacity-100"
-                style={{ colorScheme: 'dark' }}
-              />
-            </div>
-          ) : isEmailInput ? (
-            <input
-              ref={inputRef}
-              type="email"
-              value={textValue}
-              onChange={(e) => setTextValue(e.target.value)}
-              placeholder={getPlaceholder()}
-              disabled={disabled}
-              className="flex-1 px-5 py-3.5 rounded-full bg-white/5 border border-[#d4af37]/30
-                       text-white placeholder-white/40 focus:outline-none focus:border-[#d4af37]/60
-                       focus:ring-2 focus:ring-[#d4af37]/20 transition-all disabled:opacity-50"
-            />
-          ) : (
-            <input
-              ref={inputRef}
-              type="text"
-              value={textValue}
-              onChange={(e) => setTextValue(e.target.value)}
-              placeholder={getPlaceholder()}
-              disabled={disabled}
-              className="flex-1 px-5 py-3.5 rounded-full bg-white/5 border border-[#d4af37]/30
-                       text-white placeholder-white/40 focus:outline-none focus:border-[#d4af37]/60
-                       focus:ring-2 focus:ring-[#d4af37]/20 transition-all disabled:opacity-50"
-            />
-          )}
+          <input
+            ref={inputRef}
+            type={getInputType()}
+            value={textValue}
+            onChange={(e) => setTextValue(e.target.value)}
+            placeholder={getPlaceholder()}
+            disabled={disabled}
+            autoComplete={phase === 'collecting_email' ? 'email' : 'off'}
+            className="flex-1 px-5 py-3.5 rounded-full bg-white/5 border border-[#d4af37]/30
+                     text-white placeholder-white/40 focus:outline-none focus:border-[#d4af37]/60
+                     focus:ring-2 focus:ring-[#d4af37]/20 transition-all disabled:opacity-50"
+          />
 
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             type="submit"
-            disabled={disabled || (!textValue.trim() && !dateValue)}
+            disabled={disabled || !textValue.trim()}
             className="px-6 py-3.5 rounded-full bg-gradient-to-r from-[#d4af37] to-[#b8941f]
                      text-[#0a0a1a] font-medium disabled:opacity-50 disabled:cursor-not-allowed
                      hover:from-[#e0c04a] hover:to-[#c9a632] transition-all box-glow-gold"
@@ -152,16 +115,16 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
           </motion.button>
         </div>
 
-        {isDateInput && (
+        {isDatePhase && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center text-xs text-white/40 mt-2"
           >
-            Your birth date unlocks the secrets of your Life Path
+            e.g., "March 15, 1990" or "3/15/1990"
           </motion.p>
         )}
-        {isEmailInput && (
+        {phase === 'collecting_email' && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

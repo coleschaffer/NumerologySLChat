@@ -8,6 +8,7 @@ import {
   calculateCriticalDates,
   calculateCompatibilityCriticalDates,
 } from '@/lib/numerology';
+import { parseDateString, isParseError } from '@/lib/dateParser';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
@@ -80,23 +81,33 @@ export default function ChatContainer() {
 
   // ============================================
   // HANDLE USER INPUT - Core conversation flow
+  // All input is now text (including dates)
   // ============================================
-  const handleUserInput = async (value: string | Date) => {
+  const handleUserInput = async (value: string) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return;
 
     // ----------------------------------------
-    // PHASE: Collecting DOB
+    // PHASE: Collecting DOB (natural text input)
     // ----------------------------------------
-    if (phase === 'collecting_dob' && value instanceof Date) {
-      addMessage({
-        type: 'user',
-        content: value.toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-      });
+    if (phase === 'collecting_dob') {
+      // Show what user typed
+      addMessage({ type: 'user', content: trimmedValue });
 
-      setUserDOB(value);
+      // Parse the date
+      const parseResult = parseDateString(trimmedValue);
+
+      if (isParseError(parseResult)) {
+        // Oracle gently asks for clarification
+        await addOracleMessages([
+          parseResult.error,
+          parseResult.suggestion,
+        ]);
+        return;
+      }
+
+      // Successfully parsed date
+      setUserDOB(parseResult.date);
       setPhase('first_reveal');
 
       const lifePath = useConversationStore.getState().userProfile.lifePath;
@@ -134,12 +145,12 @@ export default function ChatContainer() {
     // ----------------------------------------
     // PHASE: Collecting Name
     // ----------------------------------------
-    else if (phase === 'collecting_name' && typeof value === 'string') {
-      addMessage({ type: 'user', content: value });
-      setUserName(value);
+    else if (phase === 'collecting_name') {
+      addMessage({ type: 'user', content: trimmedValue });
+      setUserName(trimmedValue);
 
       const profile = useConversationStore.getState().userProfile;
-      const firstName = value.split(' ')[0]; // Use first name for intimacy
+      const firstName = trimmedValue.split(' ')[0]; // Use first name for intimacy
 
       // REVEAL: Expression + Soul Urge (more value before asking for more)
       await addOracleMessages([
@@ -167,33 +178,40 @@ export default function ChatContainer() {
     // ----------------------------------------
     // PHASE: Relationship Hook (collecting other person's name)
     // ----------------------------------------
-    else if (phase === 'relationship_hook' && typeof value === 'string') {
-      addMessage({ type: 'user', content: value });
-      setOtherPerson(value);
+    else if (phase === 'relationship_hook') {
+      addMessage({ type: 'user', content: trimmedValue });
+      setOtherPerson(trimmedValue);
 
       await addOracleMessages([
-        `${value}...`,
+        `${trimmedValue}...`,
         "The universe is aligning to reveal this connection.",
-        `Do you know when ${value} was born? This will unlock the compatibility between you.`,
+        `Do you know when ${trimmedValue} was born? This will unlock the compatibility between you.`,
       ]);
 
       setPhase('collecting_other_dob');
     }
 
     // ----------------------------------------
-    // PHASE: Collecting Other Person's DOB
+    // PHASE: Collecting Other Person's DOB (natural text input)
     // ----------------------------------------
-    else if (phase === 'collecting_other_dob' && value instanceof Date) {
-      addMessage({
-        type: 'user',
-        content: value.toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        }),
-      });
+    else if (phase === 'collecting_other_dob') {
+      // Show what user typed
+      addMessage({ type: 'user', content: trimmedValue });
 
-      setOtherPersonDOB(value);
+      // Parse the date
+      const parseResult = parseDateString(trimmedValue);
+
+      if (isParseError(parseResult)) {
+        // Oracle gently asks for clarification
+        await addOracleMessages([
+          parseResult.error,
+          parseResult.suggestion,
+        ]);
+        return;
+      }
+
+      // Successfully parsed date
+      setOtherPersonDOB(parseResult.date);
       calculateCompatibilityScore();
 
       const state = useConversationStore.getState();
@@ -244,9 +262,9 @@ export default function ChatContainer() {
     // ----------------------------------------
     // PHASE: Collecting Email
     // ----------------------------------------
-    else if (phase === 'collecting_email' && typeof value === 'string') {
-      addMessage({ type: 'user', content: value });
-      setUserEmail(value);
+    else if (phase === 'collecting_email') {
+      addMessage({ type: 'user', content: trimmedValue });
+      setUserEmail(trimmedValue);
 
       const otherName = otherPerson?.name;
 
@@ -263,8 +281,8 @@ export default function ChatContainer() {
     // ----------------------------------------
     // FREE-FORM INPUT: Acknowledge and redirect
     // ----------------------------------------
-    else if (typeof value === 'string' && value.trim()) {
-      addMessage({ type: 'user', content: value });
+    else {
+      addMessage({ type: 'user', content: trimmedValue });
 
       // Warm acknowledgment + redirect back to flow
       const redirectMessages = getRedirectMessages(phase);
