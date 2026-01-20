@@ -175,13 +175,18 @@ export default function ChatContainer() {
     [phase, userProfile.fullName, userProfile.lifePath, speakOracleMessages, addOracleMessageWithDuration, generateSuggestions]
   );
 
+  // Scroll helper function
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
   // Auto-scroll to bottom on new messages and phase changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToBottom();
     }, 100);
     return () => clearTimeout(timer);
-  }, [messages, isTyping, phase]);
+  }, [messages, isTyping, phase, scrollToBottom]);
 
   // ============================================
   // PHASE 1: THE OPENING
@@ -319,8 +324,17 @@ export default function ChatContainer() {
           "Let me decode the vibrations hidden in your birth date...",
         ]);
 
-        // Brief pause before revealing
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // Add calculation visualization AFTER the "decode" message
+        const calculationSteps = getLifePathCalculationSteps(parseResult.date);
+        addMessage({
+          type: 'calculation',
+          content: `Your birth numbers decoded`,
+          metadata: { calculationSteps },
+        });
+
+        // Scroll to show calculation, then wait for animation to complete
+        scrollToBottom();
+        await new Promise((resolve) => setTimeout(resolve, 6000));
 
         const lifePath = useConversationStore.getState().userProfile.lifePath;
         const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
@@ -344,53 +358,46 @@ export default function ChatContainer() {
           const titleParts = interpretation.title.split('. ').filter(Boolean);
           await speakOracleMessages(titleParts.map(p => p.endsWith('.') ? p : `${p}.`));
 
-          // Add calculation visualization as permanent message in chat
-          const calculationSteps = getLifePathCalculationSteps(parseResult.date);
-          addMessage({
-            type: 'calculation',
-            content: `Your birth numbers decoded`,
-            metadata: { calculationSteps },
-          });
-
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-
           setPhase('revealing_life_path');
 
-          await speakOracleMessages([
-            interpretation.shortDescription,
-            interpretation.coreDescription,
-          ]);
+          // Speak interpretation - one sentence only
+          const shortDesc = interpretation.shortDescription.split('. ')[0] + '.';
+          await speakOracleMessages([shortDesc]);
+          scrollToBottom();
 
-          await new Promise((resolve) => setTimeout(resolve, 800));
+          await new Promise((resolve) => setTimeout(resolve, 600));
 
           // IMPORTANT: Always end with a question before showing input
-          const question1 = await getAITransition(
-            'revealing_life_path',
-            'oracle_question_1',
-            {
-              userName: userProfile.fullName,
-              lifePath,
-            },
-            [
-              "Does this resonate with you?",
-              "What aspect of your life feels most affected by this energy?",
-            ]
-          );
-
-          await speakOracleMessages(question1);
+          await speakOracleMessages([
+            "Does this resonate with what you've experienced?"
+          ]);
+          scrollToBottom();
 
           setPhase('oracle_question_1');
-          generateSuggestions(question1[question1.length - 1] || "What aspect of your life feels most affected by this energy?");
+          // Set specific yes/no/maybe suggestions
+          setDynamicSuggestions([
+            "Yes, completely",
+            "I'm not sure yet",
+            "Tell me more",
+          ]);
         } else {
           console.error('[ChatContainer] No interpretation found for life path:', lifePath);
           // Fallback - still ask a question before showing input
           await speakOracleMessages([
             `Your Life Path Number is ${lifePath}.`,
+          ]);
+          await speakOracleMessages([
             "This number holds deep significance for your journey.",
-            "Does this resonate with what you've experienced in your life?",
+          ]);
+          await speakOracleMessages([
+            "Does this resonate with what you've experienced?",
           ]);
           setPhase('oracle_question_1');
-          generateSuggestions("Does this resonate with what you've experienced?");
+          setDynamicSuggestions([
+            "Yes, completely",
+            "I'm not sure yet",
+            "Tell me more",
+          ]);
         }
       } catch (error) {
         console.error('[ChatContainer] Error in DOB handling:', error);
@@ -408,6 +415,7 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'oracle_question_1') {
       addMessage({ type: 'user', content: trimmedValue });
+      clearDynamicSuggestions();
 
       // Get AI-personalized acknowledgment based on what they said
       const acknowledgment = await getAIAcknowledgment(
@@ -418,26 +426,29 @@ export default function ChatContainer() {
         },
         phase
       );
-      await speakOracleMessages(acknowledgment);
+      // Only speak first acknowledgment line
+      if (acknowledgment.length > 0) {
+        await speakOracleMessages([acknowledgment[0]]);
+      }
 
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
-      // AI-personalized transition to name collection
-      const transitionMessages = await getAITransition(
-        'oracle_question_1',
-        'collecting_name',
-        {
-          userName: userProfile.fullName,
-          lifePath: userProfile.lifePath,
-        },
-        [
-          "But this is only your surface number.",
-          "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
-          "What is your full birth name?",
-        ]
-      );
+      // Personalized transition - but always end with name question
+      await speakOracleMessages([
+        "But this is only your surface number.",
+      ]);
 
-      await speakOracleMessages(transitionMessages);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      await speakOracleMessages([
+        "Your TRUE nature lies deeper... hidden in the name you were given at birth.",
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      await speakOracleMessages([
+        "What is your full birth name?",
+      ]);
 
       setPhase('collecting_name');
       // No suggestions for name input

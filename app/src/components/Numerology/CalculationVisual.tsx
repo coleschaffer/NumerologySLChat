@@ -6,21 +6,16 @@ import type { getLifePathCalculationSteps } from '@/lib/numerology';
 
 interface CalculationVisualProps {
   steps: ReturnType<typeof getLifePathCalculationSteps>;
+  onStepChange?: () => void; // Callback for scroll triggers
 }
 
 /**
  * CalculationVisual - Shows detailed numerology calculation breakdown
- *
- * Matches the design of CalculationAnimation with:
- * - "✦ Decoding ✦" header
- * - Card-based layout for Month/Day/Year
- * - Intermediate reduction steps
- * - Summation line
- * - Pulsing result circle
  */
-export default function CalculationVisual({ steps }: CalculationVisualProps) {
+export default function CalculationVisual({ steps, onStepChange }: CalculationVisualProps) {
   const [visibleSteps, setVisibleSteps] = useState(0);
   const [showSummation, setShowSummation] = useState(false);
+  const [showReduction, setShowReduction] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
 
@@ -45,7 +40,6 @@ export default function CalculationVisual({ steps }: CalculationVisualProps) {
       if (sum === reduced) {
         return `${digits.join(' + ')} = ${sum}`;
       }
-      // If further reduction needed
       return `${digits.join(' + ')} = ${sum}`;
     };
 
@@ -71,7 +65,6 @@ export default function CalculationVisual({ steps }: CalculationVisualProps) {
           if (sum === steps.year.reduced) {
             return `${digits.join(' + ')} = ${sum}`;
           }
-          // Year needs further reduction
           const sumDigits = String(sum).split('');
           return `${digits.join(' + ')} = ${sum} → ${sumDigits.join(' + ')} = ${steps.year.reduced}`;
         })(),
@@ -80,14 +73,32 @@ export default function CalculationVisual({ steps }: CalculationVisualProps) {
     ];
   }, [steps]);
 
+  // Calculate reduction steps for sum → final
+  const reductionSteps = useMemo(() => {
+    if (steps.sum === steps.final) return null;
+
+    const reductions: string[] = [];
+    let current = steps.sum;
+
+    while (current > 9 && current !== 11 && current !== 22 && current !== 33) {
+      const digits = String(current).split('');
+      const sum = digits.reduce((a, b) => a + parseInt(b), 0);
+      reductions.push(`${digits.join(' + ')} = ${sum}`);
+      current = sum;
+    }
+
+    return reductions;
+  }, [steps.sum, steps.final]);
+
   useEffect(() => {
-    const stepDelay = 800; // Time between steps
+    const stepDelay = 800;
     const timers: NodeJS.Timeout[] = [];
 
     // Show steps one by one
     stepData.forEach((_, index) => {
       const timer = setTimeout(() => {
         setVisibleSteps(index + 1);
+        onStepChange?.();
       }, 500 + index * stepDelay);
       timers.push(timer);
     });
@@ -95,26 +106,37 @@ export default function CalculationVisual({ steps }: CalculationVisualProps) {
     // Show summation
     const summationTimer = setTimeout(() => {
       setShowSummation(true);
+      onStepChange?.();
     }, 500 + stepData.length * stepDelay + 400);
     timers.push(summationTimer);
+
+    // Show reduction (if needed)
+    if (reductionSteps) {
+      const reductionTimer = setTimeout(() => {
+        setShowReduction(true);
+        onStepChange?.();
+      }, 500 + stepData.length * stepDelay + 900);
+      timers.push(reductionTimer);
+    }
 
     // Show result
     const resultTimer = setTimeout(() => {
       setShowResult(true);
-    }, 500 + stepData.length * stepDelay + 800);
+      onStepChange?.();
+    }, 500 + stepData.length * stepDelay + (reductionSteps ? 1400 : 900));
     timers.push(resultTimer);
 
     // Start pulse
     const pulseTimer = setTimeout(() => {
       setShowPulse(true);
-    }, 500 + stepData.length * stepDelay + 1200);
+    }, 500 + stepData.length * stepDelay + (reductionSteps ? 1800 : 1300));
     timers.push(pulseTimer);
 
     return () => timers.forEach((t) => clearTimeout(t));
-  }, [stepData]);
+  }, [stepData, reductionSteps, onStepChange]);
 
   return (
-    <div className="my-6 mx-auto max-w-md relative">
+    <div className="my-6 mx-auto max-w-lg w-full relative">
       {/* Floating particles background */}
       <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
         {particles.map((particle) => (
@@ -277,6 +299,63 @@ export default function CalculationVisual({ steps }: CalculationVisualProps) {
                 transition={{ duration: 0.4 }}
                 className="flex-1 h-px bg-gradient-to-l from-transparent via-[#d4af37]/50 to-[#d4af37]/50"
               />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Reduction animation (if sum needs to be reduced further) */}
+        <AnimatePresence>
+          {showReduction && reductionSteps && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mb-4 p-3 rounded-lg bg-[#d4af37]/10 border border-[#d4af37]/30"
+            >
+              <div className="text-center">
+                <span className="text-white/50 text-xs uppercase tracking-wider block mb-2">
+                  Reducing to single digit
+                </span>
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <span className="font-mono text-white/80 text-lg">{steps.sum}</span>
+                  <motion.span
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-[#d4af37]/60"
+                  >
+                    →
+                  </motion.span>
+                  {reductionSteps.map((reduction, idx) => (
+                    <motion.span
+                      key={idx}
+                      initial={{ opacity: 0, x: -5 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 + idx * 0.2 }}
+                      className="font-mono text-[#d4af37] text-lg"
+                    >
+                      {reduction}
+                    </motion.span>
+                  ))}
+                  <motion.span
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + reductionSteps.length * 0.2 }}
+                    className="text-[#d4af37]/60"
+                  >
+                    →
+                  </motion.span>
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 + reductionSteps.length * 0.2, type: 'spring' }}
+                    className="font-mono text-[#d4af37] font-bold text-2xl"
+                    style={{ textShadow: '0 0 10px rgba(212, 175, 55, 0.5)' }}
+                  >
+                    {steps.final}
+                  </motion.span>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

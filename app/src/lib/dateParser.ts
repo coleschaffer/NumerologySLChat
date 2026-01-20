@@ -411,9 +411,22 @@ export function validateName(input: string): { valid: boolean; errorCode?: 'EMPT
     return { valid: false, errorCode: 'EMPTY_INPUT' };
   }
 
-  // Check for off-topic patterns
-  if (isOffTopicInput(cleaned)) {
-    return { valid: false, errorCode: 'OFF_TOPIC' };
+  // Check for name-specific off-topic patterns (NOT the date one)
+  const nameOffTopicPatterns = [
+    /^(hi|hello|hey|sup|yo|what'?s? up)/i,
+    /^(thanks|thank you|thx)/i,
+    /^(how are you|how's it going)/i,
+    /^(what|who|where|why|when|how)\s/i,
+    /^(can you|could you|will you|would you)/i,
+    /^(i think|i feel|i want|i need|i am|i'm)/i,
+    /[!?]{2,}/,
+    /^\d+$/, // Just numbers
+  ];
+
+  for (const pattern of nameOffTopicPatterns) {
+    if (pattern.test(cleaned)) {
+      return { valid: false, errorCode: 'OFF_TOPIC' };
+    }
   }
 
   // Name should be at least 2 characters
