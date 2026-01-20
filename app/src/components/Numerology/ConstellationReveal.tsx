@@ -326,26 +326,17 @@ export default function ConstellationReveal({
         </defs>
       </svg>
 
-      {/* Number reveal */}
+      {/* Label only - no number overlay (constellation forms the number) */}
       <AnimatePresence>
         {(phase === 'revealed' || phase === 'complete') && (
           <motion.div
-            className="absolute inset-0 flex flex-col items-center justify-center"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, type: 'spring' }}
+            className="absolute bottom-4 left-0 right-0 text-center"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
           >
-            <span className="text-xs text-[#d4af37]/70 uppercase tracking-wider mb-1">
-              {label}
-            </span>
-            <span
-              className="text-5xl font-bold text-[#d4af37]"
-              style={{
-                textShadow: '0 0 20px rgba(212, 175, 55, 0.5), 0 0 40px rgba(212, 175, 55, 0.3)',
-                fontFamily: 'var(--font-cinzel), serif',
-              }}
-            >
-              {number}
+            <span className="text-xs text-[#d4af37]/70 uppercase tracking-wider">
+              {label} {number}
             </span>
           </motion.div>
         )}

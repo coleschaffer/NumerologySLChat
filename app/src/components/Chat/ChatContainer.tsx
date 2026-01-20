@@ -281,11 +281,12 @@ export default function ChatContainer() {
           "Let me calculate the vibrations hidden in your birth date...",
         ]);
 
-      // Show calculation animation
+      // Show calculation animation - allow time for the slower, more detailed animation
       setCalculationDOB(parseResult.date);
       setShowCalculation(true);
 
-      await new Promise((resolve) => setTimeout(resolve, 4500));
+      // Wait longer for the comprehensive calculation display (3 steps x 1.8s + pauses)
+      await new Promise((resolve) => setTimeout(resolve, 9000));
 
       const lifePath = useConversationStore.getState().userProfile.lifePath;
       const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
@@ -294,7 +295,7 @@ export default function ChatContainer() {
         setShowCalculation(false);
         playSound('reveal');
 
-        // Show constellation reveal
+        // Show constellation reveal - keep it visible throughout
         setActiveVisualization('constellation');
 
         await speakOracleMessages([
@@ -302,21 +303,18 @@ export default function ChatContainer() {
           `${interp.name}.`,
         ]);
 
-        addMessage({
-          type: 'number-reveal',
-          content: '',
-          metadata: { number: lifePath! },
-        });
+        // Keep constellation visible while Oracle explains
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        setActiveVisualization(null);
         setPhase('revealing_life_path');
 
         await speakOracleMessages([
           interp.shortDescription,
           interp.coreDescription,
         ]);
+
+        // Fade out constellation after explanation
+        setActiveVisualization(null);
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
