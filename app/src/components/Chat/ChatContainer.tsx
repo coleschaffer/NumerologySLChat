@@ -165,13 +165,14 @@ export default function ChatContainer() {
     setPhase('collecting_dob');
   }, [speakOracleMessages, setPhase, initializeAudio, playSound]);
 
-  // Start conversation on mount
-  useEffect(() => {
-    if (phase === 'opening' && messages.length === 0) {
-      const timer = setTimeout(startConversation, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [phase, messages.length, startConversation]);
+  // Show start screen state
+  const [showStartScreen, setShowStartScreen] = useState(true);
+
+  // Handle user clicking "Begin Reading" - this is the user gesture that enables audio
+  const handleBeginReading = useCallback(() => {
+    setShowStartScreen(false);
+    startConversation();
+  }, [startConversation]);
 
   // ============================================
   // HANDLE USER INPUT - Core conversation flow
@@ -598,6 +599,42 @@ export default function ChatContainer() {
   };
 
   const showPaywall = (phase === 'paywall' || phase === 'personal_paywall') && !hasPaid;
+
+  // Show start screen before conversation begins
+  if (showStartScreen) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-[#d4af37] to-[#9b59b6] flex items-center justify-center">
+            <span className="text-4xl">🔮</span>
+          </div>
+          <h2
+            className="text-2xl font-medium text-white mb-3"
+            style={{ fontFamily: 'var(--font-cinzel), serif' }}
+          >
+            The Oracle Awaits
+          </h2>
+          <p className="text-white/60 mb-8 leading-relaxed">
+            Your personal numerology reading is about to begin.
+            <br />
+            <span className="text-white/40 text-sm">For the best experience, enable sound.</span>
+          </p>
+          <button
+            onClick={handleBeginReading}
+            className="px-8 py-4 rounded-full bg-gradient-to-r from-[#d4af37] to-[#b8941f]
+                     text-[#0a0a1a] font-semibold text-lg
+                     hover:from-[#e0c04a] hover:to-[#c9a632] transition-all
+                     box-glow-gold transform hover:scale-105"
+          >
+            Begin Your Reading
+          </button>
+          <p className="text-white/30 text-xs mt-6">
+            🔊 This experience includes voice narration
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full relative">

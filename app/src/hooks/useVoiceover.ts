@@ -80,9 +80,12 @@ export function useVoiceover(): UseVoiceoverReturn {
     // Check cache first
     const cached = audioCache.get(text);
     if (cached) {
+      console.log('[Voiceover] Using cached audio for:', text.substring(0, 30) + '...');
       const blob = new Blob([cached], { type: 'audio/mpeg' });
       return URL.createObjectURL(blob);
     }
+
+    console.log('[Voiceover] Generating speech for:', text.substring(0, 30) + '...');
 
     const response = await fetch('/api/speech', {
       method: 'POST',
@@ -91,10 +94,13 @@ export function useVoiceover(): UseVoiceoverReturn {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to generate speech');
+      const errorText = await response.text();
+      console.error('[Voiceover] API error:', response.status, errorText);
+      throw new Error(`Failed to generate speech: ${response.status}`);
     }
 
     const audioData = await response.arrayBuffer();
+    console.log('[Voiceover] Received audio data:', audioData.byteLength, 'bytes');
 
     // Cache for future use
     audioCache.set(text, audioData);
@@ -106,12 +112,16 @@ export function useVoiceover(): UseVoiceoverReturn {
   // Speak text and return promise that resolves with duration
   const speak = useCallback(
     async (text: string): Promise<number> => {
+      console.log('[Voiceover] speak() called for:', text.substring(0, 30) + '...');
+
       if (!audioRef.current) {
+        console.warn('[Voiceover] No audio element available');
         return estimateDuration(text);
       }
 
       // If muted, just return estimated duration
       if (state.isMuted) {
+        console.log('[Voiceover] Muted, skipping audio playback');
         return estimateDuration(text);
       }
 
@@ -119,6 +129,7 @@ export function useVoiceover(): UseVoiceoverReturn {
 
       try {
         const audioUrl = await generateSpeech(text);
+        console.log('[Voiceover] Audio URL generated:', audioUrl);
 
         return new Promise((resolve, reject) => {
           if (!audioRef.current) {
@@ -152,13 +163,19 @@ export function useVoiceover(): UseVoiceoverReturn {
           };
 
           const handleCanPlay = () => {
+            console.log('[Voiceover] Audio can play, starting playback...');
             setState((prev) => ({
               ...prev,
               isLoading: false,
               isPlaying: true,
               currentText: text,
             }));
-            audio.play().catch(handleError);
+            audio.play()
+              .then(() => console.log('[Voiceover] Playback started successfully'))
+              .catch((e) => {
+                console.error('[Voiceover] Playback failed:', e);
+                handleError(e);
+              });
           };
 
           const cleanup = () => {
