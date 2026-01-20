@@ -243,7 +243,13 @@ export async function getMysticalValidationMessages(
 
     const data = await response.json();
     console.log('[mysticalValidation] API response data:', data);
-    return data.messages || fallbackMessages;
+
+    // Check if messages array exists AND has content (empty array is truthy!)
+    if (data.messages && data.messages.length > 0) {
+      return data.messages;
+    }
+    console.log('[mysticalValidation] No messages from API, using fallback');
+    return fallbackMessages;
   } catch (error) {
     console.error('[mysticalValidation] Failed to get mystical validation messages:', error);
     return fallbackMessages;

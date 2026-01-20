@@ -155,6 +155,8 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
     const aiResponse = data.content?.[0]?.text || '';
+    console.log('[Oracle API] Mode:', mode, 'AI response length:', aiResponse.length);
+    console.log('[Oracle API] AI response:', aiResponse.substring(0, 200));
 
     if (mode === 'suggestions') {
       const parsedSuggestions = parseSuggestionsResponse(aiResponse);
@@ -163,6 +165,14 @@ export async function POST(request: NextRequest) {
 
     // Parse the response into separate messages
     const messages = parseOracleResponse(aiResponse, baseMessages);
+    console.log('[Oracle API] Parsed messages:', messages.length, 'fallback had:', baseMessages.length);
+
+    // If parsing returned empty or fewer messages than expected, use fallback
+    if (messages.length === 0) {
+      console.log('[Oracle API] Using fallback messages');
+      return NextResponse.json({ messages: baseMessages });
+    }
+
     return NextResponse.json({ messages });
   } catch (error) {
     console.error('Oracle API error:', error);
