@@ -326,6 +326,9 @@ export default function ChatContainer() {
       setOtherPersonDOB(parseResult.date);
       calculateCompatibilityScore();
 
+      // Hide input during compatibility reveal
+      setPhase('compatibility_tease');
+
       const state = useConversationStore.getState();
       const otherLifePath = state.otherPerson?.lifePath;
       const compat = state.compatibility;
