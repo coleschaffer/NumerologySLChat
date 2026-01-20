@@ -252,6 +252,73 @@ function normalizeYear(year: number): number {
 }
 
 /**
+ * Try to interpret a new input as a correction to a previous invalid date attempt
+ *
+ * Example:
+ * - Previous: "march 15 209" (invalid year)
+ * - New input: "2009"
+ * - Result: Combines to "march 15 2009" and parses successfully
+ */
+export function tryParseAsCorrection(
+  newInput: string,
+  previousInput: string
+): ParseResult | null {
+  const newCleaned = newInput.trim().toLowerCase();
+  const prevCleaned = previousInput.trim().toLowerCase();
+
+  // Check if new input is just a year (4 digits)
+  const yearOnlyMatch = newCleaned.match(/^(\d{4})$/);
+  if (yearOnlyMatch) {
+    const newYear = parseInt(yearOnlyMatch[1], 10);
+
+    // Check if previous input has a month and day but invalid/missing year
+    // Try to extract month and day from previous input
+    const monthNameMatch = prevCleaned.match(/([a-z]+)\s+(\d{1,2})/);
+    const dayFirstMatch = prevCleaned.match(/(\d{1,2})\s+([a-z]+)/);
+
+    let month: number | undefined;
+    let day: number | undefined;
+
+    if (monthNameMatch && MONTHS[monthNameMatch[1]] !== undefined) {
+      month = MONTHS[monthNameMatch[1]];
+      day = parseInt(monthNameMatch[2], 10);
+    } else if (dayFirstMatch && MONTHS[dayFirstMatch[2]] !== undefined) {
+      day = parseInt(dayFirstMatch[1], 10);
+      month = MONTHS[dayFirstMatch[2]];
+    }
+
+    if (month !== undefined && day !== undefined) {
+      // Try to create a valid date with the new year
+      const combinedInput = `${month + 1}/${day}/${newYear}`;
+      console.log('[dateParser] Trying correction:', combinedInput);
+      const result = parseDateString(combinedInput);
+      if (!isParseError(result)) {
+        console.log('[dateParser] Correction successful!');
+        return result;
+      }
+    }
+  }
+
+  // Check if new input looks like it's completing a partial date
+  // e.g., previous was "march" and new is "15 1990"
+  const hasMonth = Object.keys(MONTHS).some(m => prevCleaned.includes(m));
+  const hasNumbers = /\d/.test(newCleaned);
+
+  if (hasMonth && hasNumbers) {
+    // Try combining them
+    const combined = `${prevCleaned} ${newCleaned}`;
+    console.log('[dateParser] Trying combined input:', combined);
+    const result = parseDateString(combined);
+    if (!isParseError(result)) {
+      console.log('[dateParser] Combined parse successful!');
+      return result;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Validate email format
  */
 export function validateEmail(input: string): { valid: boolean; errorCode?: 'EMPTY_INPUT' | 'INVALID_FORMAT' | 'OFF_TOPIC' } {

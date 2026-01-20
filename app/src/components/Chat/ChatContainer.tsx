@@ -10,7 +10,7 @@ import {
   calculateCriticalDates,
   calculateCompatibilityCriticalDates,
 } from '@/lib/numerology';
-import { parseDateString, isParseError, validateEmail, validateName } from '@/lib/dateParser';
+import { parseDateString, isParseError, validateEmail, validateName, tryParseAsCorrection } from '@/lib/dateParser';
 import { getMysticalValidationMessages } from '@/lib/mysticalValidation';
 import { useDynamicSuggestions } from '@/hooks/useDynamicSuggestions';
 import MessageBubble from './MessageBubble';
@@ -246,8 +246,24 @@ export default function ChatContainer() {
     if (phase === 'collecting_dob') {
       addMessage({ type: 'user', content: trimmedValue });
 
-      const parseResult = parseDateString(trimmedValue);
+      let parseResult = parseDateString(trimmedValue);
       console.log('[ChatContainer] DOB parse result:', parseResult);
+
+      // If parsing failed, try to interpret as a correction to the previous input
+      if (isParseError(parseResult)) {
+        // Find the previous user message (excluding the one we just added)
+        const userMessages = messages.filter(m => m.type === 'user');
+        const previousUserMessage = userMessages[userMessages.length - 1]; // -1 because we just added one
+
+        if (previousUserMessage) {
+          console.log('[ChatContainer] Trying to parse as correction to:', previousUserMessage.content);
+          const correctionResult = tryParseAsCorrection(trimmedValue, previousUserMessage.content);
+          if (correctionResult && !isParseError(correctionResult)) {
+            console.log('[ChatContainer] Correction successful!');
+            parseResult = correctionResult;
+          }
+        }
+      }
 
       if (isParseError(parseResult)) {
         console.log('[ChatContainer] DOB is parse error, calling handleValidationError');
@@ -541,7 +557,20 @@ export default function ChatContainer() {
     else if (phase === 'collecting_other_dob') {
       addMessage({ type: 'user', content: trimmedValue });
 
-      const parseResult = parseDateString(trimmedValue);
+      let parseResult = parseDateString(trimmedValue);
+
+      // If parsing failed, try to interpret as a correction to the previous input
+      if (isParseError(parseResult)) {
+        const userMessages = messages.filter(m => m.type === 'user');
+        const previousUserMessage = userMessages[userMessages.length - 1];
+
+        if (previousUserMessage) {
+          const correctionResult = tryParseAsCorrection(trimmedValue, previousUserMessage.content);
+          if (correctionResult && !isParseError(correctionResult)) {
+            parseResult = correctionResult;
+          }
+        }
+      }
 
       if (isParseError(parseResult)) {
         await handleValidationError(parseResult.errorCode, parseResult.originalInput, 'date');
