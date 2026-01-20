@@ -30,7 +30,6 @@ import PaywallModal from '../Payment/PaywallModal';
 // CalculationAnimation no longer used - calculation shown as permanent message
 import ConstellationReveal from '../Numerology/ConstellationReveal';
 import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
-import LetterTransform from '../Numerology/LetterTransform';
 import CompatibilityVisual from '../Numerology/CompatibilityVisual';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useVoiceover } from '@/hooks/useVoiceover';
@@ -71,7 +70,7 @@ export default function ChatContainer() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
-  const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
+  const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'compatibility' | null>(null);
 
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
   const {
@@ -476,18 +475,30 @@ export default function ChatContainer() {
         `${firstName}...`,
       ]);
 
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      // Show letter transform animation for Expression
-      setActiveVisualization('letter-transform');
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
       await speakOracleMessages([
         "The letters of your name carry vibrations I can now read clearly.",
       ]);
 
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Add letter transform animation as permanent message
+      addMessage({
+        type: 'letter-transform',
+        content: 'Your name decoded',
+        metadata: {
+          letterTransform: {
+            name: trimmedValue,
+            number: profile.expression!,
+            label: 'Expression Number',
+            numberType: 'expression',
+          },
+        },
+      });
 
-      setActiveVisualization(null);
+      // Scroll to show animation, wait for it to complete
+      scrollToBottom();
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
       playSound('chime');
       setPhase('revealing_expression');
 
@@ -1103,14 +1114,7 @@ export default function ChatContainer() {
             />
           )}
 
-          {activeVisualization === 'letter-transform' && userProfile.fullName && userProfile.expression && (
-            <LetterTransform
-              name={userProfile.fullName}
-              number={userProfile.expression}
-              label="Expression Number"
-              numberType="expression"
-            />
-          )}
+          {/* Letter transform is now added as permanent message after name collection */}
 
           {activeVisualization === 'compatibility' && userProfile.lifePath && otherPerson?.lifePath && compatibility && (
             <CompatibilityVisual

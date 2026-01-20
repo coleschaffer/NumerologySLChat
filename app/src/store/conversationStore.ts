@@ -13,7 +13,7 @@ import type { ConversationPhase } from '@/lib/phaseConfig';
 // Re-export the phase type for convenience
 export type { ConversationPhase } from '@/lib/phaseConfig';
 
-export type MessageType = 'oracle' | 'user' | 'system' | 'number-reveal' | 'calculation';
+export type MessageType = 'oracle' | 'user' | 'system' | 'number-reveal' | 'calculation' | 'letter-transform';
 
 export interface Message {
   id: string;
@@ -26,6 +26,13 @@ export interface Message {
     isPartOfSequence?: boolean;
     typingDuration?: number; // Duration for typing animation in ms
     visualization?: 'constellation' | 'sacred-geometry' | 'letter-transform' | 'compatibility';
+    // For letter-transform message type
+    letterTransform?: {
+      name: string;
+      number: number;
+      label: string;
+      numberType: 'expression' | 'soul-urge' | 'personality';
+    };
   };
 }
 

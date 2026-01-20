@@ -6,6 +6,7 @@ import type { Message } from '@/store/conversationStore';
 import type { NormalizedAlignment } from '@/hooks/useVoiceoverStreaming';
 import NumberReveal from '../Numerology/NumberReveal';
 import CalculationVisual from '../Numerology/CalculationVisual';
+import LetterTransform from '../Numerology/LetterTransform';
 import TypewriterText from './TypewriterText';
 
 interface MessageBubbleProps {
@@ -57,6 +58,7 @@ export default function MessageBubble({
   const isUser = message.type === 'user';
   const isNumberReveal = message.type === 'number-reveal';
   const isCalculation = message.type === 'calculation';
+  const isLetterTransform = message.type === 'letter-transform';
 
   // Track if this message's animation has completed
   const [hasAnimated, setHasAnimated] = useState(false);
@@ -100,6 +102,25 @@ export default function MessageBubble({
         <CalculationVisual
           steps={message.metadata.calculationSteps}
           onStepChange={onCalculationStepChange}
+        />
+      </motion.div>
+    );
+  }
+
+  if (isLetterTransform && message.metadata?.letterTransform) {
+    const { name, number, label, numberType } = message.metadata.letterTransform;
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex justify-center my-4"
+      >
+        <LetterTransform
+          name={name}
+          number={number}
+          label={label}
+          numberType={numberType}
         />
       </motion.div>
     );
