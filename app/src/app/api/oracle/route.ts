@@ -5,7 +5,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY_STEFAN || process.env.AN
 /**
  * Oracle API Request Types
  */
-type OracleMode = 'enhance' | 'validation' | 'suggestions' | 'interpret';
+type OracleMode = 'enhance' | 'validation' | 'suggestions' | 'interpret' | 'criticalDate' | 'yearAhead' | 'relationshipAdvice';
 
 interface OracleContext {
   lifePath?: number;
@@ -46,6 +46,30 @@ interface InterpretInfo {
   };
 }
 
+interface CriticalDateInfo {
+  date: string;
+  type: string;
+  baseDescription: string;
+}
+
+interface YearAheadInfo {
+  personalYear: number;
+  months?: number; // How many months ahead to predict
+}
+
+interface RelationshipAdviceInfo {
+  otherName: string;
+  otherLifePath: number;
+  compatibilityScore: number;
+  compatibilityLevel: string;
+  areas: {
+    communication: number;
+    emotional: number;
+    physical: number;
+    longTerm: number;
+  };
+}
+
 interface OracleRequest {
   mode?: OracleMode;
   context: OracleContext;
@@ -55,6 +79,9 @@ interface OracleRequest {
   validation?: ValidationInfo;
   suggestions?: SuggestionInfo;
   interpret?: InterpretInfo;
+  criticalDate?: CriticalDateInfo;
+  yearAhead?: YearAheadInfo;
+  relationshipAdvice?: RelationshipAdviceInfo;
 }
 
 const ORACLE_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide. Your voice is wise, warm, and certain - never cold or distant. You speak in certainties, not maybes.
@@ -95,6 +122,59 @@ AVOID:
 - Technical language ("invalid format", "please enter", "error")
 - Sounding frustrated or impatient
 - Generic responses - personalize to their specific input when possible`;
+
+const CRITICAL_DATE_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide explaining the significance of upcoming dates.
+
+Your task is to explain why a specific date is cosmically significant for this person based on their numerology.
+
+VOICE GUIDELINES:
+- Speak with certainty: "On this day...", "The stars align...", "Your energy peaks..."
+- Make it feel personal to THEM, not generic advice
+- Create anticipation and excitement (or appropriate caution)
+- Be specific about what they should do or be aware of
+
+FORMAT:
+- 2-3 sentences maximum
+- First sentence: What's happening cosmically
+- Second sentence: What this means for them specifically
+- Optional third: What action to take
+
+Keep it mystical but actionable. Under 60 words.`;
+
+const YEAR_AHEAD_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide revealing the path ahead.
+
+Generate a personalized year-ahead prediction based on someone's Personal Year number and numerology profile.
+
+VOICE GUIDELINES:
+- Speak prophetically: "I see...", "The year unfolds...", "Your path leads..."
+- Reference their specific numbers and how they interact with the Personal Year
+- Balance positive opportunities with honest challenges
+- Create open loops that make them want to know more
+
+STRUCTURE (3 paragraphs):
+1. THEME: The overall energy and theme of their year (2-3 sentences)
+2. OPPORTUNITIES: Specific opportunities aligned with their numbers (2-3 sentences)
+3. CHALLENGES: What to watch for, how to navigate difficulties (2-3 sentences)
+
+Be specific to their profile. Under 150 words total.`;
+
+const RELATIONSHIP_ADVICE_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide providing deep relationship insights.
+
+Generate personalized relationship guidance based on two people's numerology compatibility.
+
+VOICE GUIDELINES:
+- Speak with intimate knowing: "Between you two...", "Your connection...", "I see the dance of..."
+- Reference BOTH people's numbers and how they interact
+- Be honest about challenges while offering hope
+- Give specific, actionable advice
+
+STRUCTURE (4 sections):
+1. THE BOND: What draws these two energies together (2 sentences)
+2. YOUR STRENGTHS: Where you naturally complement each other (2 sentences)
+3. THE FRICTION: Where conflict may arise and why (2 sentences)
+4. THE PATH FORWARD: Specific advice for harmony (2 sentences)
+
+Be specific to their number combination. Under 150 words total.`;
 
 const INTERPRETATION_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide delivering deeply personal numerology readings.
 
@@ -159,7 +239,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: OracleRequest = await request.json();
-    const { mode = 'enhance', context, phase, baseMessages, userInput, validation, suggestions, interpret } = body;
+    const { mode = 'enhance', context, phase, baseMessages, userInput, validation, suggestions, interpret, criticalDate, yearAhead, relationshipAdvice } = body;
 
     let systemPrompt: string;
     let userPrompt: string;
@@ -176,6 +256,18 @@ export async function POST(request: NextRequest) {
       case 'interpret':
         systemPrompt = INTERPRETATION_SYSTEM_PROMPT;
         userPrompt = buildInterpretPrompt(context, interpret!);
+        break;
+      case 'criticalDate':
+        systemPrompt = CRITICAL_DATE_SYSTEM_PROMPT;
+        userPrompt = buildCriticalDatePrompt(context, criticalDate!);
+        break;
+      case 'yearAhead':
+        systemPrompt = YEAR_AHEAD_SYSTEM_PROMPT;
+        userPrompt = buildYearAheadPrompt(context, yearAhead!);
+        break;
+      case 'relationshipAdvice':
+        systemPrompt = RELATIONSHIP_ADVICE_SYSTEM_PROMPT;
+        userPrompt = buildRelationshipAdvicePrompt(context, relationshipAdvice!);
         break;
       case 'enhance':
       default:
@@ -231,6 +323,34 @@ export async function POST(request: NextRequest) {
       };
       console.log('[Oracle API] Parsed interpretation:', interpretation);
       return NextResponse.json({ interpretation });
+    }
+
+    if (mode === 'criticalDate') {
+      // Return the AI-generated date explanation
+      console.log('[Oracle API] Critical date explanation:', aiResponse);
+      return NextResponse.json({ explanation: aiResponse.trim() });
+    }
+
+    if (mode === 'yearAhead') {
+      // Parse year ahead prediction into sections
+      const sections = aiResponse.split('\n\n').filter((s: string) => s.trim());
+      const prediction = {
+        theme: sections[0] || '',
+        opportunities: sections[1] || '',
+        challenges: sections[2] || '',
+        full: aiResponse.trim(),
+      };
+      console.log('[Oracle API] Year ahead prediction generated');
+      return NextResponse.json({ prediction });
+    }
+
+    if (mode === 'relationshipAdvice') {
+      // Parse relationship advice into sections
+      const advice = {
+        full: aiResponse.trim(),
+      };
+      console.log('[Oracle API] Relationship advice generated');
+      return NextResponse.json({ advice });
     }
 
     // Parse the response into separate messages
@@ -457,6 +577,108 @@ function parseOracleResponse(response: string, fallback: string[]): string[] {
 
   // Fallback to original messages
   return fallback;
+}
+
+function buildCriticalDatePrompt(
+  context: OracleContext,
+  criticalDate: CriticalDateInfo
+): string {
+  let prompt = `Generate a personalized explanation for this upcoming significant date.\n\n`;
+
+  prompt += `USER PROFILE:\n`;
+  if (context.userName) prompt += `- Name: ${context.userName}\n`;
+  if (context.lifePath) prompt += `- Life Path: ${context.lifePath} (${getLifePathName(context.lifePath)})\n`;
+  if (context.expression) prompt += `- Expression: ${context.expression}\n`;
+  if (context.soulUrge) prompt += `- Soul Urge: ${context.soulUrge}\n`;
+
+  prompt += `\nUPCOMING DATE:\n`;
+  prompt += `- Date: ${criticalDate.date}\n`;
+  prompt += `- Type: ${criticalDate.type}\n`;
+  prompt += `- Base meaning: "${criticalDate.baseDescription}"\n\n`;
+
+  prompt += `Now personalize this date's significance for THIS specific person.`;
+  prompt += `Reference their numbers. Be specific about what they should do or expect.`;
+
+  return prompt;
+}
+
+function buildYearAheadPrompt(
+  context: OracleContext,
+  yearAhead: YearAheadInfo
+): string {
+  let prompt = `Generate a personalized year-ahead prediction.\n\n`;
+
+  prompt += `USER PROFILE:\n`;
+  if (context.userName) prompt += `- Name: ${context.userName}\n`;
+  if (context.lifePath) prompt += `- Life Path: ${context.lifePath} (${getLifePathName(context.lifePath)})\n`;
+  if (context.expression) prompt += `- Expression: ${context.expression}\n`;
+  if (context.soulUrge) prompt += `- Soul Urge: ${context.soulUrge}\n`;
+
+  prompt += `\nYEAR CONTEXT:\n`;
+  prompt += `- Personal Year: ${yearAhead.personalYear}\n`;
+  prompt += `- Personal Year meaning: ${getPersonalYearMeaning(yearAhead.personalYear)}\n\n`;
+
+  prompt += `Generate 3 paragraphs:\n`;
+  prompt += `1. THEME: Overall energy of their year (how Personal Year ${yearAhead.personalYear} interacts with Life Path ${context.lifePath})\n`;
+  prompt += `2. OPPORTUNITIES: Specific opportunities for someone with their profile\n`;
+  prompt += `3. CHALLENGES: What to watch for and how to navigate\n\n`;
+
+  prompt += `Be specific to their number combination. Use "you" to speak directly to them.`;
+
+  return prompt;
+}
+
+function buildRelationshipAdvicePrompt(
+  context: OracleContext,
+  relationshipAdvice: RelationshipAdviceInfo
+): string {
+  let prompt = `Generate personalized relationship advice for this couple.\n\n`;
+
+  prompt += `PERSON 1 (the user):\n`;
+  if (context.userName) prompt += `- Name: ${context.userName}\n`;
+  if (context.lifePath) prompt += `- Life Path: ${context.lifePath} (${getLifePathName(context.lifePath)})\n`;
+  if (context.expression) prompt += `- Expression: ${context.expression}\n`;
+  if (context.soulUrge) prompt += `- Soul Urge: ${context.soulUrge}\n`;
+
+  prompt += `\nPERSON 2:\n`;
+  prompt += `- Name: ${relationshipAdvice.otherName}\n`;
+  prompt += `- Life Path: ${relationshipAdvice.otherLifePath} (${getLifePathName(relationshipAdvice.otherLifePath)})\n`;
+
+  prompt += `\nCOMPATIBILITY ANALYSIS:\n`;
+  prompt += `- Overall Score: ${relationshipAdvice.compatibilityScore}%\n`;
+  prompt += `- Level: ${relationshipAdvice.compatibilityLevel}\n`;
+  prompt += `- Communication: ${relationshipAdvice.areas.communication}%\n`;
+  prompt += `- Emotional: ${relationshipAdvice.areas.emotional}%\n`;
+  prompt += `- Physical: ${relationshipAdvice.areas.physical}%\n`;
+  prompt += `- Long-term: ${relationshipAdvice.areas.longTerm}%\n\n`;
+
+  prompt += `Generate 4 sections:\n`;
+  prompt += `1. THE BOND: What draws Life Path ${context.lifePath} and ${relationshipAdvice.otherLifePath} together\n`;
+  prompt += `2. YOUR STRENGTHS: Where these two numbers complement each other\n`;
+  prompt += `3. THE FRICTION: Where ${context.lifePath} and ${relationshipAdvice.otherLifePath} may clash\n`;
+  prompt += `4. THE PATH FORWARD: Specific, actionable advice for harmony\n\n`;
+
+  prompt += `Be specific to their number combination. Address ${context.userName || 'the user'} directly.`;
+
+  return prompt;
+}
+
+function getPersonalYearMeaning(year: number): string {
+  const meanings: Record<number, string> = {
+    1: 'New beginnings, independence, taking initiative',
+    2: 'Partnerships, patience, cooperation',
+    3: 'Creativity, self-expression, social expansion',
+    4: 'Building foundations, hard work, stability',
+    5: 'Change, freedom, adventure, unexpected shifts',
+    6: 'Home, family, responsibility, nurturing',
+    7: 'Introspection, spiritual growth, inner wisdom',
+    8: 'Achievement, abundance, material success',
+    9: 'Completion, letting go, humanitarian service',
+    11: 'Spiritual awakening, intuition, illumination',
+    22: 'Master building, large-scale manifestation',
+    33: 'Master teaching, compassionate service',
+  };
+  return meanings[year] || 'transformation and growth';
 }
 
 function parseSuggestionsResponse(response: string): string[] {

@@ -166,6 +166,175 @@ export async function getAIAcknowledgment(
 /**
  * Generate AI-personalized transition messages
  */
+/**
+ * Generate AI-personalized critical date explanation
+ */
+export async function getAICriticalDateExplanation(
+  date: Date,
+  type: string,
+  baseDescription: string,
+  context: UserContext
+): Promise<string> {
+  try {
+    const response = await fetch('/api/oracle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'criticalDate',
+        context: {
+          userName: context.userName || undefined,
+          lifePath: context.lifePath || undefined,
+          expression: context.expression || undefined,
+          soulUrge: context.soulUrge || undefined,
+        },
+        phase: 'critical_date',
+        baseMessages: [],
+        criticalDate: {
+          date: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+          type,
+          baseDescription,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return baseDescription;
+    }
+
+    const data = await response.json();
+    return data.explanation || baseDescription;
+  } catch (error) {
+    console.error('[getAICriticalDateExplanation] Error:', error);
+    return baseDescription;
+  }
+}
+
+/**
+ * Generate AI-personalized year ahead prediction
+ */
+export async function getAIYearAheadPrediction(
+  personalYear: number,
+  context: UserContext
+): Promise<{
+  theme: string;
+  opportunities: string;
+  challenges: string;
+  full: string;
+}> {
+  const fallback = {
+    theme: `Your Personal Year ${personalYear} brings a time of ${getPersonalYearTheme(personalYear)}.`,
+    opportunities: 'New opportunities aligned with your life path will emerge.',
+    challenges: 'Stay aware of your tendencies and navigate challenges with wisdom.',
+    full: '',
+  };
+  fallback.full = `${fallback.theme}\n\n${fallback.opportunities}\n\n${fallback.challenges}`;
+
+  try {
+    const response = await fetch('/api/oracle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'yearAhead',
+        context: {
+          userName: context.userName || undefined,
+          lifePath: context.lifePath || undefined,
+          expression: context.expression || undefined,
+          soulUrge: context.soulUrge || undefined,
+        },
+        phase: 'year_ahead',
+        baseMessages: [],
+        yearAhead: {
+          personalYear,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const data = await response.json();
+    return data.prediction || fallback;
+  } catch (error) {
+    console.error('[getAIYearAheadPrediction] Error:', error);
+    return fallback;
+  }
+}
+
+/**
+ * Generate AI-personalized relationship advice
+ */
+export async function getAIRelationshipAdvice(
+  context: UserContext,
+  otherName: string,
+  otherLifePath: number,
+  compatibility: {
+    score: number;
+    level: string;
+    areas: {
+      communication: number;
+      emotional: number;
+      physical: number;
+      longTerm: number;
+    };
+  }
+): Promise<string> {
+  const fallback = `The connection between Life Path ${context.lifePath} and ${otherLifePath} carries both harmony and challenge. Your bond has the potential for depth, but requires awareness and effort.`;
+
+  try {
+    const response = await fetch('/api/oracle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'relationshipAdvice',
+        context: {
+          userName: context.userName || undefined,
+          lifePath: context.lifePath || undefined,
+          expression: context.expression || undefined,
+          soulUrge: context.soulUrge || undefined,
+        },
+        phase: 'relationship_advice',
+        baseMessages: [],
+        relationshipAdvice: {
+          otherName,
+          otherLifePath,
+          compatibilityScore: compatibility.score,
+          compatibilityLevel: compatibility.level,
+          areas: compatibility.areas,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const data = await response.json();
+    return data.advice?.full || fallback;
+  } catch (error) {
+    console.error('[getAIRelationshipAdvice] Error:', error);
+    return fallback;
+  }
+}
+
+function getPersonalYearTheme(year: number): string {
+  const themes: Record<number, string> = {
+    1: 'new beginnings and self-discovery',
+    2: 'partnerships and patience',
+    3: 'creativity and self-expression',
+    4: 'building foundations and discipline',
+    5: 'change and adventure',
+    6: 'responsibility and nurturing',
+    7: 'introspection and spiritual growth',
+    8: 'abundance and personal power',
+    9: 'completion and letting go',
+    11: 'spiritual awakening and intuition',
+    22: 'manifesting grand visions',
+    33: 'teaching and healing others',
+  };
+  return themes[year] || 'transformation';
+}
+
 export async function getAITransition(
   fromPhase: string,
   toPhase: string,

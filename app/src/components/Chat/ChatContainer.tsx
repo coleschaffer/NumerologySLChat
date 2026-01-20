@@ -13,7 +13,14 @@ import {
 import { parseDateString, isParseError, validateEmail, validateName, tryParseAsCorrection } from '@/lib/dateParser';
 import { getMysticalValidationMessages } from '@/lib/mysticalValidation';
 import { useDynamicSuggestions } from '@/hooks/useDynamicSuggestions';
-import { useAIInterpretation, getAIAcknowledgment, getAITransition } from '@/hooks/useAIInterpretation';
+import {
+  useAIInterpretation,
+  getAIAcknowledgment,
+  getAITransition,
+  getAICriticalDateExplanation,
+  getAIYearAheadPrediction,
+  getAIRelationshipAdvice,
+} from '@/hooks/useAIInterpretation';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
@@ -519,10 +526,43 @@ export default function ChatContainer() {
       const firstName = profile.fullName?.split(' ')[0] || 'Dear one';
 
       if (criticalDates) {
+        // Get AI-generated year ahead prediction
+        const yearPrediction = await getAIYearAheadPrediction(
+          criticalDates.personalYear,
+          {
+            userName: profile.fullName,
+            lifePath: profile.lifePath,
+            expression: profile.expression,
+            soulUrge: profile.soulUrge,
+          }
+        );
+
         await speakOracleMessages([
           `I see much about you now, ${firstName}.`,
-          `You are in a Personal Year ${criticalDates.personalYear}—a year of ${getPersonalYearTheme(criticalDates.personalYear)}.`,
+          `You are in a Personal Year ${criticalDates.personalYear}.`,
         ]);
+
+        // Speak the AI-generated year theme
+        await speakOracleMessages([yearPrediction.theme]);
+
+        // If there are upcoming critical dates, mention the most significant one
+        if (criticalDates.dates.length > 0) {
+          const nextDate = criticalDates.dates[0];
+          const aiDateExplanation = await getAICriticalDateExplanation(
+            nextDate.date,
+            nextDate.type,
+            nextDate.description,
+            {
+              userName: profile.fullName,
+              lifePath: profile.lifePath,
+            }
+          );
+
+          await speakOracleMessages([
+            `I see a significant date approaching: ${nextDate.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}...`,
+            aiDateExplanation,
+          ]);
+        }
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -720,10 +760,42 @@ export default function ChatContainer() {
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        await speakOracleMessages([
-          "I can see the complete picture now.",
-          "The harmony... and the warnings.",
-        ]);
+        // Get AI-generated relationship advice
+        const relationshipAdvice = await getAIRelationshipAdvice(
+          {
+            userName: userName,
+            lifePath: state.userProfile.lifePath,
+            expression: state.userProfile.expression,
+            soulUrge: state.userProfile.soulUrge,
+          },
+          otherName,
+          otherLifePath,
+          {
+            score: compat.score,
+            level: compatLevel,
+            areas: compat.areas,
+          }
+        );
+
+        // Split the advice into digestible chunks for speaking
+        const adviceLines = relationshipAdvice.split('\n').filter(line => line.trim());
+        if (adviceLines.length > 0) {
+          await speakOracleMessages([
+            "I can see the complete picture now...",
+          ]);
+
+          // Speak the first 2-3 lines of advice
+          const adviceToSpeak = adviceLines.slice(0, 3);
+          for (const line of adviceToSpeak) {
+            await speakOracleMessages([line]);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        } else {
+          await speakOracleMessages([
+            "I can see the complete picture now.",
+            "The harmony... and the warnings.",
+          ]);
+        }
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
