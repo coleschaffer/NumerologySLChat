@@ -104,7 +104,8 @@ export default function ChatContainer() {
   const speakOracleMessages = useCallback(
     async (contents: string[]) => {
       for (let i = 0; i < contents.length; i++) {
-        const text = contents[i];
+        // Normalize punctuation to prevent double periods
+        const text = normalizePunctuation(contents[i]);
 
         // Show typing indicator while audio loads
         setTyping(true);
@@ -1131,8 +1132,8 @@ export default function ChatContainer() {
         onSelect={handleSuggestion}
         userName={userProfile.fullName || undefined}
         otherPersonName={otherPerson?.name}
-        dynamicSuggestions={aiSuggestions}
-        isLoading={suggestionsLoading}
+        dynamicSuggestions={dynamicSuggestions.suggestions.length > 0 ? dynamicSuggestions.suggestions : aiSuggestions}
+        isLoading={suggestionsLoading && dynamicSuggestions.suggestions.length === 0}
       />
 
       {/* Input area */}
@@ -1147,6 +1148,20 @@ export default function ChatContainer() {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Normalize punctuation to prevent double periods
+ * - ".." becomes "."
+ * - "..." stays as ellipsis
+ * - "...." or more becomes "..."
+ */
+function normalizePunctuation(text: string): string {
+  // First, replace 4+ periods with ellipsis
+  let result = text.replace(/\.{4,}/g, '...');
+  // Then, replace exactly 2 periods with single period
+  result = result.replace(/(?<!\.)\.\.(?!\.)/g, '.');
+  return result;
+}
 
 function getPersonalYearTheme(year: number): string {
   const themes: Record<number, string> = {
