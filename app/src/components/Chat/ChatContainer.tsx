@@ -95,8 +95,11 @@ export default function ChatContainer() {
         const audioDuration = await speak(text);
         setTyping(false);
 
+        // Add 8% buffer to typing duration so text finishes with audio
+        // (accounts for slight audio playback delay after play() is called)
+        const bufferedAudioDuration = audioDuration * 1.08;
         const estimatedTypingDuration = text.length * 60;
-        const typingDuration = Math.max(audioDuration, estimatedTypingDuration);
+        const typingDuration = Math.max(bufferedAudioDuration, estimatedTypingDuration);
 
         addOracleMessageWithDuration(text, typingDuration);
 
