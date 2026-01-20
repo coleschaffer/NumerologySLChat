@@ -25,6 +25,57 @@ const MONTHS: Record<string, number> = {
 };
 
 /**
+ * Fuzzy match a month name (handles typos like "januuary", "febuary", etc.)
+ */
+function fuzzyMatchMonth(input: string): number | undefined {
+  const cleaned = input.toLowerCase().trim();
+
+  // Direct match first
+  if (MONTHS[cleaned] !== undefined) {
+    return MONTHS[cleaned];
+  }
+
+  // Calculate Levenshtein distance for fuzzy matching
+  const levenshtein = (a: string, b: string): number => {
+    const matrix: number[][] = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        matrix[i][j] = b[i-1] === a[j-1]
+          ? matrix[i-1][j-1]
+          : Math.min(matrix[i-1][j-1] + 1, matrix[i][j-1] + 1, matrix[i-1][j] + 1);
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  // Only try full month names for fuzzy matching
+  const fullMonths = ['january', 'february', 'march', 'april', 'may', 'june',
+                      'july', 'august', 'september', 'october', 'november', 'december'];
+
+  let bestMatch: string | null = null;
+  let bestDistance = Infinity;
+
+  for (const month of fullMonths) {
+    const distance = levenshtein(cleaned, month);
+    // Allow up to 2 character differences for longer months, 1 for shorter
+    const threshold = month.length > 5 ? 2 : 1;
+    if (distance <= threshold && distance < bestDistance) {
+      bestDistance = distance;
+      bestMatch = month;
+    }
+  }
+
+  if (bestMatch) {
+    console.log(`[dateParser] Fuzzy matched "${cleaned}" to "${bestMatch}"`);
+    return MONTHS[bestMatch];
+  }
+
+  return undefined;
+}
+
+/**
  * Error codes for date parsing failures
  * These are used by mysticalValidation.ts to generate contextual mystical responses
  */
@@ -66,8 +117,9 @@ function isOffTopicInput(input: string): boolean {
   // Check if there are any numbers at all
   const hasNumbers = /\d/.test(cleaned);
 
-  // Check for month names
-  const hasMonthName = Object.keys(MONTHS).some(month => cleaned.includes(month));
+  // Check for month names (including fuzzy matches)
+  const words = cleaned.split(/\s+/);
+  const hasMonthName = words.some(word => fuzzyMatchMonth(word) !== undefined);
 
   // If no numbers AND no month names, it's likely off-topic
   if (!hasNumbers && !hasMonthName) {
@@ -131,8 +183,9 @@ export function parseDateString(input: string): ParseResult {
   );
   if (monthNameMatch) {
     const monthStr = monthNameMatch[1];
-    if (MONTHS[monthStr] !== undefined) {
-      month = MONTHS[monthStr];
+    const fuzzyMonth = fuzzyMatchMonth(monthStr);
+    if (fuzzyMonth !== undefined) {
+      month = fuzzyMonth;
       day = parseInt(monthNameMatch[2], 10);
       year = normalizeYear(parseInt(monthNameMatch[3], 10));
     }
@@ -145,9 +198,10 @@ export function parseDateString(input: string): ParseResult {
     );
     if (dayFirstMatch) {
       const monthStr = dayFirstMatch[2];
-      if (MONTHS[monthStr] !== undefined) {
+      const fuzzyMonth = fuzzyMatchMonth(monthStr);
+      if (fuzzyMonth !== undefined) {
         day = parseInt(dayFirstMatch[1], 10);
-        month = MONTHS[monthStr];
+        month = fuzzyMonth;
         year = normalizeYear(parseInt(dayFirstMatch[3], 10));
       }
     }

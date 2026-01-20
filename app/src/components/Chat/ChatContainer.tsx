@@ -9,6 +9,7 @@ import { getLifePathInterpretation } from '@/lib/interpretations';
 import {
   calculateCriticalDates,
   calculateCompatibilityCriticalDates,
+  getLifePathCalculationSteps,
 } from '@/lib/numerology';
 import { parseDateString, isParseError, validateEmail, validateName, tryParseAsCorrection } from '@/lib/dateParser';
 import { getMysticalValidationMessages } from '@/lib/mysticalValidation';
@@ -26,9 +27,7 @@ import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
 import SuggestionCards from './SuggestionCards';
 import PaywallModal from '../Payment/PaywallModal';
-import CalculationAnimation, {
-  generateLifePathSteps,
-} from './CalculationAnimation';
+// CalculationAnimation no longer used - calculation shown as permanent message
 import ConstellationReveal from '../Numerology/ConstellationReveal';
 import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
 import LetterTransform from '../Numerology/LetterTransform';
@@ -72,8 +71,6 @@ export default function ChatContainer() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
-  const [showCalculation, setShowCalculation] = useState(false);
-  const [calculationDOB, setCalculationDOB] = useState<Date | null>(null);
   const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'letter-transform' | 'compatibility' | null>(null);
 
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
@@ -322,12 +319,8 @@ export default function ChatContainer() {
           "Let me decode the vibrations hidden in your birth date...",
         ]);
 
-        // Show calculation animation
-        setCalculationDOB(parseResult.date);
-        setShowCalculation(true);
-
-        // Wait for the calculation animation to complete (3 steps x 1.8s + pauses)
-        await new Promise((resolve) => setTimeout(resolve, 9000));
+        // Brief pause before revealing
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
         const lifePath = useConversationStore.getState().userProfile.lifePath;
         const interp = lifePath ? getLifePathInterpretation(lifePath) : null;
@@ -351,7 +344,15 @@ export default function ChatContainer() {
           const titleParts = interpretation.title.split('. ').filter(Boolean);
           await speakOracleMessages(titleParts.map(p => p.endsWith('.') ? p : `${p}.`));
 
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          // Add calculation visualization as permanent message in chat
+          const calculationSteps = getLifePathCalculationSteps(parseResult.date);
+          addMessage({
+            type: 'calculation',
+            content: `Your birth numbers decoded`,
+            metadata: { calculationSteps },
+          });
+
+          await new Promise((resolve) => setTimeout(resolve, 2000));
 
           setPhase('revealing_life_path');
 
@@ -359,9 +360,6 @@ export default function ChatContainer() {
             interpretation.shortDescription,
             interpretation.coreDescription,
           ]);
-
-          // Hide calculation after interpretation
-          setShowCalculation(false);
 
           await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -385,7 +383,6 @@ export default function ChatContainer() {
           generateSuggestions(question1[question1.length - 1] || "What aspect of your life feels most affected by this energy?");
         } else {
           console.error('[ChatContainer] No interpretation found for life path:', lifePath);
-          setShowCalculation(false);
           // Fallback - still ask a question before showing input
           await speakOracleMessages([
             `Your Life Path Number is ${lifePath}.`,
@@ -397,7 +394,6 @@ export default function ChatContainer() {
         }
       } catch (error) {
         console.error('[ChatContainer] Error in DOB handling:', error);
-        setShowCalculation(false);
         setActiveVisualization(null);
         await speakOracleMessages([
           "I sense a disturbance in the connection...",
@@ -1084,14 +1080,7 @@ export default function ChatContainer() {
 
           {isTyping && <TypingIndicator />}
 
-          {/* Calculation Animation - shows step-by-step numerology math */}
-          {showCalculation && calculationDOB && (
-            <CalculationAnimation
-              steps={generateLifePathSteps(calculationDOB)}
-              result={useConversationStore.getState().userProfile.lifePath || 0}
-              resultLabel="Your Life Path"
-            />
-          )}
+{/* Calculation Animation removed - now added as permanent message after Life Path reveal */}
 
           {/* Visualization Components (inline with chat) */}
           {activeVisualization === 'sacred-geometry' && userProfile.lifePath && (

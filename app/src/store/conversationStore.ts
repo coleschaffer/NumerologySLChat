@@ -168,12 +168,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       },
     }));
 
-    // Add calculation visualization message
-    get().addMessage({
-      type: 'calculation',
-      content: `Calculating your Life Path Number...`,
-      metadata: { calculationSteps },
-    });
+    // Calculation visualization is now added manually in ChatContainer after Life Path reveal
   },
 
   setUserName: (name) => {
