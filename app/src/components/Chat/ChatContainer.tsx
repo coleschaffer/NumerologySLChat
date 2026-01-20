@@ -96,8 +96,8 @@ export default function ChatContainer() {
           const audioDuration = await speak(text);
           setTyping(false);
 
-          // Add 4% buffer to typing duration so text finishes with audio
-          const bufferedAudioDuration = audioDuration * 1.04;
+          // Add 2% buffer to typing duration so text finishes with audio
+          const bufferedAudioDuration = audioDuration * 1.02;
           const estimatedTypingDuration = text.length * 60;
           const typingDuration = Math.max(bufferedAudioDuration, estimatedTypingDuration);
 
@@ -126,7 +126,9 @@ export default function ChatContainer() {
    */
   const handleValidationError = useCallback(
     async (errorCode: string, originalInput: string, expectedInput: 'date' | 'name' | 'email' | 'freeform') => {
+      console.log('[ChatContainer] handleValidationError called:', { errorCode, originalInput, expectedInput, phase });
       try {
+        console.log('[ChatContainer] Getting mystical validation messages...');
         const messages = await getMysticalValidationMessages({
           phase,
           errorCode: errorCode as any,
@@ -135,8 +137,10 @@ export default function ChatContainer() {
           lifePath: userProfile.lifePath || undefined,
           expectedInput,
         });
+        console.log('[ChatContainer] Got messages:', messages);
 
         await speakOracleMessages(messages);
+        console.log('[ChatContainer] Finished speaking validation messages');
 
         // Regenerate suggestions after validation error to guide user
         const questionMap: Record<string, string> = {
@@ -241,6 +245,8 @@ export default function ChatContainer() {
   // HANDLE USER INPUT - Core conversation flow
   // ============================================
   const handleUserInput = async (value: string) => {
+    console.log('[ChatContainer] handleUserInput called with:', value, 'phase:', phase);
+    try {
     const trimmedValue = value.trim();
     if (!trimmedValue) return;
 
@@ -256,9 +262,12 @@ export default function ChatContainer() {
       addMessage({ type: 'user', content: trimmedValue });
 
       const parseResult = parseDateString(trimmedValue);
+      console.log('[ChatContainer] DOB parse result:', parseResult);
 
       if (isParseError(parseResult)) {
+        console.log('[ChatContainer] DOB is parse error, calling handleValidationError');
         await handleValidationError(parseResult.errorCode, parseResult.originalInput, 'date');
+        console.log('[ChatContainer] handleValidationError completed');
         return;
       }
 
@@ -680,6 +689,14 @@ export default function ChatContainer() {
 
       // Use mystical validation for off-topic redirects
       await handleValidationError('OFF_TOPIC', trimmedValue, 'freeform');
+    }
+    } catch (error) {
+      console.error('[ChatContainer] Unhandled error in handleUserInput:', error);
+      // Show a fallback message so the user isn't left hanging
+      addOracleMessageWithDuration(
+        "I sense a disturbance in our connection... Let us try again.",
+        2000
+      );
     }
   };
 

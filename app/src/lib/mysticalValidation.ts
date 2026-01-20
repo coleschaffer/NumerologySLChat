@@ -208,7 +208,12 @@ function getRedirectMessage(expectedInput: ValidationContext['expectedInput']): 
 export async function getMysticalValidationMessages(
   context: ValidationContext
 ): Promise<string[]> {
+  console.log('[mysticalValidation] getMysticalValidationMessages called:', context);
+  const fallbackMessages = getFallbackMysticalMessages(context.errorCode, context.expectedInput);
+  console.log('[mysticalValidation] Fallback messages:', fallbackMessages);
+
   try {
+    console.log('[mysticalValidation] Calling /api/oracle with validation mode...');
     const response = await fetch('/api/oracle', {
       method: 'POST',
       headers: {
@@ -226,20 +231,22 @@ export async function getMysticalValidationMessages(
           originalInput: context.originalInput,
           expectedInput: context.expectedInput,
         },
-        baseMessages: getFallbackMysticalMessages(context.errorCode, context.expectedInput),
+        baseMessages: fallbackMessages,
       }),
     });
 
+    console.log('[mysticalValidation] API response status:', response.status);
     if (!response.ok) {
-      console.warn('Oracle API returned non-OK status:', response.status);
-      return getFallbackMysticalMessages(context.errorCode, context.expectedInput);
+      console.warn('[mysticalValidation] Oracle API returned non-OK status:', response.status);
+      return fallbackMessages;
     }
 
     const data = await response.json();
-    return data.messages || getFallbackMysticalMessages(context.errorCode, context.expectedInput);
+    console.log('[mysticalValidation] API response data:', data);
+    return data.messages || fallbackMessages;
   } catch (error) {
-    console.error('Failed to get mystical validation messages:', error);
-    return getFallbackMysticalMessages(context.errorCode, context.expectedInput);
+    console.error('[mysticalValidation] Failed to get mystical validation messages:', error);
+    return fallbackMessages;
   }
 }
 
