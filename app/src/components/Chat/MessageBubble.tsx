@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
 import type { Message } from '@/store/conversationStore';
+import type { NormalizedAlignment } from '@/hooks/useVoiceoverStreaming';
 import NumberReveal from '../Numerology/NumberReveal';
 import CalculationVisual from '../Numerology/CalculationVisual';
 import TypewriterText from './TypewriterText';
@@ -19,6 +20,18 @@ interface MessageBubbleProps {
    * Callback when typing animation completes
    */
   onTypingComplete?: () => void;
+  /**
+   * Alignment data for synced text reveal (from ElevenLabs WebSocket)
+   */
+  alignment?: NormalizedAlignment | null;
+  /**
+   * Current audio playback time in seconds
+   */
+  audioCurrentTime?: number;
+  /**
+   * Whether audio is currently playing
+   */
+  isAudioPlaying?: boolean;
 }
 
 export default function MessageBubble({
@@ -26,6 +39,9 @@ export default function MessageBubble({
   isLatest,
   typingDuration,
   onTypingComplete,
+  alignment,
+  audioCurrentTime,
+  isAudioPlaying,
 }: MessageBubbleProps) {
   const isOracle = message.type === 'oracle';
   const isUser = message.type === 'user';
@@ -114,6 +130,9 @@ export default function MessageBubble({
               text={message.content}
               duration={typingDuration}
               onComplete={handleTypingComplete}
+              alignment={alignment}
+              audioCurrentTime={audioCurrentTime}
+              isAudioPlaying={isAudioPlaying}
             />
           ) : (
             message.content

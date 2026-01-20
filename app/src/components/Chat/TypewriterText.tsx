@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import type { NormalizedAlignment } from '@/hooks/useVoiceoverStreaming';
 
 interface TypewriterTextProps {
   text: string;
@@ -26,10 +27,29 @@ interface TypewriterTextProps {
    * CSS class name for the text
    */
   className?: string;
+  /**
+   * Alignment data from ElevenLabs for synced text reveal.
+   * When provided, text reveals in sync with audio playback.
+   */
+  alignment?: NormalizedAlignment | null;
+  /**
+   * Current audio playback time in seconds.
+   * Used with alignment for synced text reveal.
+   */
+  audioCurrentTime?: number;
+  /**
+   * Whether audio is currently playing.
+   * Used to determine if synced mode is active.
+   */
+  isAudioPlaying?: boolean;
 }
 
 /**
  * TypewriterText - Displays text with a letter-by-letter typing animation
+ *
+ * Supports two modes:
+ * 1. Time-based: Uses duration/msPerChar to animate typing
+ * 2. Audio-synced: Uses alignment data and currentTime to sync with audio
  *
  * Creates an immersive, slower typing effect that makes the Oracle
  * feel like a real entity carefully choosing its words.
@@ -41,6 +61,9 @@ export default function TypewriterText({
   onComplete,
   skipAnimation = false,
   className = '',
+  alignment,
+  audioCurrentTime = 0,
+  isAudioPlaying = false,
 }: TypewriterTextProps) {
   const [displayedText, setDisplayedText] = useState(skipAnimation ? text : '');
   const [isComplete, setIsComplete] = useState(skipAnimation);
@@ -50,13 +73,58 @@ export default function TypewriterText({
   const onCompleteRef = useRef(onComplete);
   // Track if animation has started to prevent restarts
   const hasStartedRef = useRef(false);
+  // Track if we've completed in synced mode
+  const syncedCompleteRef = useRef(false);
 
   // Keep onComplete ref up to date
   useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
+  // SYNCED MODE: Calculate visible characters based on audio time
+  const syncedVisibleLength = useMemo(() => {
+    if (!alignment || !isAudioPlaying) return null;
+
+    const currentTimeMs = audioCurrentTime * 1000;
+    let visibleChars = 0;
+
+    for (let i = 0; i < alignment.characters.length; i++) {
+      if (alignment.characters[i].startMs <= currentTimeMs) {
+        visibleChars = i + 1;
+      } else {
+        break;
+      }
+    }
+
+    return Math.min(visibleChars, text.length);
+  }, [alignment, audioCurrentTime, isAudioPlaying, text.length]);
+
+  // Handle synced mode completion
   useEffect(() => {
+    if (
+      alignment &&
+      isAudioPlaying &&
+      syncedVisibleLength === text.length &&
+      !syncedCompleteRef.current
+    ) {
+      syncedCompleteRef.current = true;
+      setIsComplete(true);
+      onCompleteRef.current?.();
+    }
+  }, [alignment, isAudioPlaying, syncedVisibleLength, text.length]);
+
+  // Reset synced complete ref when text changes
+  useEffect(() => {
+    syncedCompleteRef.current = false;
+  }, [text]);
+
+  // TIME-BASED MODE: Animate character by character
+  useEffect(() => {
+    // Skip time-based animation if using synced mode
+    if (alignment && isAudioPlaying) {
+      return;
+    }
+
     // Reset when text changes
     if (skipAnimation) {
       setDisplayedText(text);
@@ -121,12 +189,26 @@ export default function TypewriterText({
     };
     // Only depend on text, duration, msPerChar, skipAnimation - NOT onComplete
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, duration, msPerChar, skipAnimation]);
+  }, [text, duration, msPerChar, skipAnimation, alignment, isAudioPlaying]);
+
+  // Determine what text to display
+  const textToShow = useMemo(() => {
+    // Synced mode: use alignment-based calculation
+    if (alignment && isAudioPlaying && syncedVisibleLength !== null) {
+      return text.slice(0, syncedVisibleLength);
+    }
+    // Time-based mode: use state
+    return displayedText;
+  }, [alignment, isAudioPlaying, syncedVisibleLength, text, displayedText]);
+
+  const showCursor = alignment && isAudioPlaying
+    ? syncedVisibleLength !== null && syncedVisibleLength < text.length
+    : !isComplete;
 
   return (
     <span className={className}>
-      {displayedText}
-      {!isComplete && (
+      {textToShow}
+      {showCursor && (
         <span className="animate-pulse text-[#d4af37]">|</span>
       )}
     </span>
