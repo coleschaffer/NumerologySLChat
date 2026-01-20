@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           text,
-          model_id: 'eleven_monolingual_v1',
+          model_id: 'eleven_multilingual_v2', // Updated from deprecated eleven_monolingual_v1
           voice_settings: {
             stability: 0.6,        // Slightly varied for natural feel
             similarity_boost: 0.8, // Stay close to voice character
