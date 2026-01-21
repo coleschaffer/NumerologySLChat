@@ -26,7 +26,9 @@ import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
 import SuggestionCards from './SuggestionCards';
+import FlowModeToggle from './FlowModeToggle';
 import PaywallModal from '../Payment/PaywallModal';
+import { getPhaseInstruction } from '@/lib/aiPhaseInstructions';
 // CalculationAnimation no longer used - calculation shown as permanent message
 import ConstellationReveal from '../Numerology/ConstellationReveal';
 import SacredGeometryReveal from '../Numerology/SacredGeometryReveal';
@@ -55,6 +57,7 @@ export default function ChatContainer() {
     isTyping,
     hasPaid,
     dynamicSuggestions,
+    flowMode,
     addMessage,
     addOracleMessages,
     setPhase,
@@ -88,6 +91,73 @@ export default function ChatContainer() {
 
   // AI interpretation hook
   const { getInterpretation } = useAIInterpretation();
+
+  /**
+   * Get AI-generated conversation messages for a phase
+   * Falls back to templated messages on error
+   */
+  const getAIConversationMessages = useCallback(async (
+    targetPhase: ConversationPhase,
+    userMessage?: string
+  ): Promise<string[]> => {
+    const instruction = getPhaseInstruction(targetPhase);
+
+    // Skip phases that don't need messages
+    if (instruction.messageCount === 0) {
+      return [];
+    }
+
+    try {
+      const state = useConversationStore.getState();
+      const history = state.messages.slice(-10).map(m => ({
+        role: m.type === 'user' ? 'user' as const : 'oracle' as const,
+        content: m.content,
+      }));
+
+      const response = await fetch('/api/oracle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'conversation',
+          phase: targetPhase,
+          context: {
+            userName: state.userProfile.fullName,
+            lifePath: state.userProfile.lifePath,
+            expression: state.userProfile.expression,
+            soulUrge: state.userProfile.soulUrge,
+            personality: state.userProfile.personality,
+            birthdayNumber: state.userProfile.birthdayNumber,
+            otherPersonName: state.otherPerson?.name,
+            otherLifePath: state.otherPerson?.lifePath,
+            compatibilityScore: state.compatibility?.score,
+            compatibilityLevel: state.compatibility?.level,
+          },
+          baseMessages: [], // Not used for conversation mode
+          conversation: {
+            goal: instruction.goal,
+            guidelines: instruction.guidelines,
+            messageCount: instruction.messageCount,
+            userMessage,
+            history,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.messages && data.messages.length > 0) {
+        return data.messages;
+      }
+
+      throw new Error('No messages returned');
+    } catch (error) {
+      console.error('[ChatContainer] AI conversation error, using fallback:', error);
+      return [];
+    }
+  }, []);
 
   // Get the addOracleMessageWithDuration from store
   const addOracleMessageWithDuration = useConversationStore(
@@ -198,39 +268,60 @@ export default function ChatContainer() {
     initializeAudio();
     playSound('ambient');
 
-    await speakOracleMessages([
-      "You felt it, didn't you?",
-    ]);
+    const currentFlowMode = useConversationStore.getState().flowMode;
 
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    if (currentFlowMode === 'ai') {
+      // AI-generated opening
+      const aiMessages = await getAIConversationMessages('opening');
+      if (aiMessages.length > 0) {
+        for (const msg of aiMessages) {
+          await speakOracleMessages([msg]);
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+      } else {
+        // Fallback to templated
+        await speakOracleMessages([
+          "You felt it, didn't you?",
+          "That pull. That sense that something in your life is slightly... off.",
+          "Tell me... when were you born?",
+        ]);
+      }
+    } else {
+      // Templated opening
+      await speakOracleMessages([
+        "You felt it, didn't you?",
+      ]);
 
-    await speakOracleMessages([
-      "That pull. That sense that something in your life is slightly... off.",
-    ]);
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-    await speakOracleMessages([
-      "Like you're following a script you didn't write.",
-    ]);
+      await speakOracleMessages([
+        "That pull. That sense that something in your life is slightly... off.",
+      ]);
 
-    await new Promise((resolve) => setTimeout(resolve, 600));
+      await speakOracleMessages([
+        "Like you're following a script you didn't write.",
+      ]);
 
-    await speakOracleMessages([
-      "There's a reason for that.",
-    ]);
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
-    await speakOracleMessages([
-      "And it's hidden in the exact moment you took your first breath.",
-    ]);
+      await speakOracleMessages([
+        "There's a reason for that.",
+      ]);
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+      await speakOracleMessages([
+        "And it's hidden in the exact moment you took your first breath.",
+      ]);
 
-    await speakOracleMessages([
-      "Tell me... when were you born?",
-    ]);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      await speakOracleMessages([
+        "Tell me... when were you born?",
+      ]);
+    }
 
     setPhase('collecting_dob');
     // No suggestions for DOB collection - placeholder has format hint
-  }, [speakOracleMessages, setPhase, initializeAudio, playSound]);
+  }, [speakOracleMessages, setPhase, initializeAudio, playSound, getAIConversationMessages]);
 
   // Show start screen state
   const [showStartScreen, setShowStartScreen] = useState(true);
@@ -1031,6 +1122,12 @@ export default function ChatContainer() {
           <p className="text-white/70 mb-8 leading-relaxed text-base md:text-lg">
             {currentCopy.subhead}
           </p>
+
+          {/* Flow Mode Toggle */}
+          <div className="mb-6">
+            <FlowModeToggle />
+          </div>
+
           <button
             onClick={handleBeginReading}
             className="px-8 py-4 rounded-full bg-gradient-to-r from-[#d4af37] to-[#b8941f]

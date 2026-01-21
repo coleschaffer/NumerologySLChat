@@ -59,6 +59,8 @@ export interface DynamicSuggestions {
   lastOracleQuestion: string | null;
 }
 
+export type FlowMode = 'templated' | 'ai';
+
 export interface ConversationState {
   phase: ConversationPhase;
   messages: Message[];
@@ -69,6 +71,7 @@ export interface ConversationState {
   hasPaid: boolean;
   paidTier: number | null;
   dynamicSuggestions: DynamicSuggestions;
+  flowMode: FlowMode;
 
   // Actions
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
@@ -86,6 +89,7 @@ export interface ConversationState {
   setPaid: (tier: number) => void;
   setDynamicSuggestions: (suggestions: string[], oracleQuestion?: string) => void;
   clearDynamicSuggestions: () => void;
+  setFlowMode: (mode: FlowMode) => void;
   reset: () => void;
 }
 
@@ -116,6 +120,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   hasPaid: false,
   paidTier: null,
   dynamicSuggestions: initialDynamicSuggestions,
+  flowMode: 'templated',
 
   addMessage: (message) => {
     const newMessage: Message = {
@@ -282,6 +287,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       dynamicSuggestions: initialDynamicSuggestions,
     }),
 
+  setFlowMode: (mode) => set({ flowMode: mode }),
+
   reset: () =>
     set({
       phase: 'opening',
@@ -293,5 +300,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       hasPaid: false,
       paidTier: null,
       dynamicSuggestions: initialDynamicSuggestions,
+      flowMode: 'templated',
     }),
 }));

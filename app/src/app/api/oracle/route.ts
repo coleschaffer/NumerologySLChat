@@ -5,7 +5,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY_STEFAN || process.env.AN
 /**
  * Oracle API Request Types
  */
-type OracleMode = 'enhance' | 'validation' | 'suggestions' | 'interpret' | 'criticalDate' | 'yearAhead' | 'relationshipAdvice';
+type OracleMode = 'enhance' | 'validation' | 'suggestions' | 'interpret' | 'criticalDate' | 'yearAhead' | 'relationshipAdvice' | 'conversation';
 
 interface OracleContext {
   lifePath?: number;
@@ -70,6 +70,18 @@ interface RelationshipAdviceInfo {
   };
 }
 
+interface ConversationInfo {
+  /** Instructions for what to accomplish in this phase */
+  goal: string;
+  guidelines: string[];
+  /** Number of messages to generate */
+  messageCount: number;
+  /** User's last message (if responding to input) */
+  userMessage?: string;
+  /** Recent conversation history for context */
+  history?: Array<{ role: 'oracle' | 'user'; content: string }>;
+}
+
 interface OracleRequest {
   mode?: OracleMode;
   context: OracleContext;
@@ -82,6 +94,7 @@ interface OracleRequest {
   criticalDate?: CriticalDateInfo;
   yearAhead?: YearAheadInfo;
   relationshipAdvice?: RelationshipAdviceInfo;
+  conversation?: ConversationInfo;
 }
 
 const ORACLE_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide. Your voice is wise, warm, and certain - never cold or distant. You speak in certainties, not maybes.
@@ -197,6 +210,33 @@ FORBIDDEN:
 - Paragraphs
 - More than 20 words per line`;
 
+const CONVERSATION_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide delivering a personalized reading through a chat interface.
+
+VOICE & TONE:
+- Speak with warm certainty, never cold or distant
+- Use phrases like "I see...", "The numbers reveal...", "Your path shows..."
+- Create intimacy - this is a personal revelation, not a generic reading
+- Be specific to THIS person using their actual numbers and name
+
+CRITICAL FORMATTING:
+- Generate EXACTLY the requested number of messages
+- Each message MUST be 1-2 sentences MAX (under 30 words)
+- Format: Each message on its own line, starting with a number and period
+- Think: chat bubbles from a mystical friend, not paragraphs
+
+GUIDELINES:
+- Reference the user's actual numerology numbers when relevant
+- Create open loops and intrigue that make them want to continue
+- When revealing numbers, be dramatic but concise
+- When asking questions, make them thought-provoking
+- Never break character or sound like AI
+
+FORBIDDEN:
+- Long paragraphs or explanations
+- Generic horoscope language
+- Hedging ("might", "perhaps", "possibly")
+- Breaking the fourth wall`;
+
 const SUGGESTIONS_SYSTEM_PROMPT = `You are The Oracle, a mystical numerology guide. Generate suggested responses that DIRECTLY answer the Oracle's question.
 
 CRITICAL RULE: Suggestions must be ANSWERS to the Oracle's question, not follow-up questions.
@@ -236,7 +276,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: OracleRequest = await request.json();
-    const { mode = 'enhance', context, phase, baseMessages, userInput, validation, suggestions, interpret, criticalDate, yearAhead, relationshipAdvice } = body;
+    const { mode = 'enhance', context, phase, baseMessages, userInput, validation, suggestions, interpret, criticalDate, yearAhead, relationshipAdvice, conversation } = body;
 
     let systemPrompt: string;
     let userPrompt: string;
@@ -265,6 +305,10 @@ export async function POST(request: NextRequest) {
       case 'relationshipAdvice':
         systemPrompt = RELATIONSHIP_ADVICE_SYSTEM_PROMPT;
         userPrompt = buildRelationshipAdvicePrompt(context, relationshipAdvice!);
+        break;
+      case 'conversation':
+        systemPrompt = CONVERSATION_SYSTEM_PROMPT;
+        userPrompt = buildConversationPrompt(context, phase, conversation!);
         break;
       case 'enhance':
       default:
@@ -348,6 +392,13 @@ export async function POST(request: NextRequest) {
       };
       console.log('[Oracle API] Relationship advice generated');
       return NextResponse.json({ advice });
+    }
+
+    if (mode === 'conversation') {
+      // Parse conversation response into messages
+      const messages = parseConversationResponse(aiResponse, conversation?.messageCount || 1);
+      console.log('[Oracle API] Conversation messages:', messages.length);
+      return NextResponse.json({ messages });
     }
 
     // Parse the response into separate messages
@@ -701,4 +752,93 @@ function parseSuggestionsResponse(response: string): string[] {
 
   // Return what we found (up to 4 suggestions)
   return suggestions.slice(0, 4);
+}
+
+function buildConversationPrompt(
+  context: OracleContext,
+  phase: string,
+  conversation: ConversationInfo
+): string {
+  let prompt = `CURRENT PHASE: ${phase}\n\n`;
+
+  prompt += `YOUR TASK:\n`;
+  prompt += `Goal: ${conversation.goal}\n`;
+  prompt += `Guidelines:\n`;
+  conversation.guidelines.forEach((g, i) => {
+    prompt += `${i + 1}. ${g}\n`;
+  });
+  prompt += `\nGenerate exactly ${conversation.messageCount} message(s).\n\n`;
+
+  prompt += `USER CONTEXT:\n`;
+  if (context.userName) {
+    prompt += `- Name: ${context.userName}\n`;
+  }
+  if (context.lifePath) {
+    prompt += `- Life Path Number: ${context.lifePath} (${getLifePathName(context.lifePath)})\n`;
+  }
+  if (context.expression) {
+    prompt += `- Expression Number: ${context.expression}\n`;
+  }
+  if (context.soulUrge) {
+    prompt += `- Soul Urge Number: ${context.soulUrge}\n`;
+  }
+  if (context.personality) {
+    prompt += `- Personality Number: ${context.personality}\n`;
+  }
+  if (context.birthdayNumber) {
+    prompt += `- Birthday Number: ${context.birthdayNumber}\n`;
+  }
+
+  if (context.otherPersonName) {
+    prompt += `\nOTHER PERSON:\n`;
+    prompt += `- Name: ${context.otherPersonName}\n`;
+    if (context.otherLifePath) {
+      prompt += `- Their Life Path: ${context.otherLifePath}\n`;
+    }
+    if (context.compatibilityScore) {
+      prompt += `- Compatibility Score: ${context.compatibilityScore}%\n`;
+      prompt += `- Compatibility Level: ${context.compatibilityLevel}\n`;
+    }
+  }
+
+  if (conversation.userMessage) {
+    prompt += `\nUSER JUST SAID: "${conversation.userMessage}"\n`;
+    prompt += `(Acknowledge this naturally in your response)\n`;
+  }
+
+  if (conversation.history && conversation.history.length > 0) {
+    prompt += `\nRECENT CONVERSATION:\n`;
+    conversation.history.slice(-6).forEach((msg) => {
+      prompt += `${msg.role === 'oracle' ? 'Oracle' : 'User'}: "${msg.content}"\n`;
+    });
+  }
+
+  prompt += `\nIMPORTANT: Use the ACTUAL numbers provided above. Never invent or change them.\n`;
+  prompt += `Format your response as ${conversation.messageCount} numbered lines (1. First message, 2. Second message, etc.)`;
+
+  return prompt;
+}
+
+function parseConversationResponse(response: string, expectedCount: number): string[] {
+  const lines = response.split('\n').filter((line) => line.trim());
+  const messages: string[] = [];
+
+  for (const line of lines) {
+    // Match lines starting with a number and period
+    const match = line.match(/^\d+\.\s*(.+)$/);
+    if (match) {
+      const message = match[1].trim();
+      // Remove quotes if present
+      const cleaned = message.replace(/^["']|["']$/g, '');
+      messages.push(cleaned);
+    }
+  }
+
+  // If we didn't get numbered messages, try splitting by newlines
+  if (messages.length === 0) {
+    const fallbackMessages = lines.slice(0, expectedCount);
+    return fallbackMessages.map(m => m.trim()).filter(m => m.length > 0);
+  }
+
+  return messages.slice(0, expectedCount);
 }
