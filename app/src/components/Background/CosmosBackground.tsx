@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Star {
   x: number;
@@ -51,6 +51,20 @@ export default function CosmosBackground({
   const numbersRef = useRef<FloatingNumber[]>([]);
   const frameRef = useRef<number>(0);
   const personalizedRef = useRef<number | null>(null);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  // Check for reduced motion preference
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    const handleChange = (e: MediaQueryListEvent) => {
+      setPrefersReducedMotion(e.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   // Update personalized number reference
   useEffect(() => {
@@ -185,19 +199,21 @@ export default function CosmosBackground({
 
       // Draw floating numbers (behind stars)
       numbersRef.current.forEach((num) => {
-        // Update position
-        num.x += Math.cos(num.direction) * num.speed;
-        num.y += Math.sin(num.direction) * num.speed;
+        // Update position only if reduced motion is not preferred
+        if (!prefersReducedMotion) {
+          num.x += Math.cos(num.direction) * num.speed;
+          num.y += Math.sin(num.direction) * num.speed;
 
-        // Wrap around screen
-        if (num.x < -50) num.x = canvas.width + 50;
-        if (num.x > canvas.width + 50) num.x = -50;
-        if (num.y < -50) num.y = canvas.height + 50;
-        if (num.y > canvas.height + 50) num.y = -50;
+          // Wrap around screen
+          if (num.x < -50) num.x = canvas.width + 50;
+          if (num.x > canvas.width + 50) num.x = -50;
+          if (num.y < -50) num.y = canvas.height + 50;
+          if (num.y > canvas.height + 50) num.y = -50;
+        }
 
-        // Handle number transition
+        // Handle number transition (allow this even with reduced motion as it's a state change)
         if (num.transitionProgress < 1) {
-          num.transitionProgress += 0.005; // Smooth transition
+          num.transitionProgress += prefersReducedMotion ? 0.05 : 0.005; // Faster transition if reduced motion
           if (num.transitionProgress >= 1) {
             num.value = num.targetValue;
           }
@@ -207,9 +223,10 @@ export default function CosmosBackground({
         const displayValue =
           num.transitionProgress >= 0.5 ? num.targetValue : num.value;
 
-        // Draw the number with glow
-        const pulseOpacity =
-          num.opacity + Math.sin(time * 0.001 + num.x) * 0.03;
+        // Draw the number with glow (no pulse animation if reduced motion)
+        const pulseOpacity = prefersReducedMotion
+          ? num.opacity
+          : num.opacity + Math.sin(time * 0.001 + num.x) * 0.03;
 
         // Glow effect (gold tint when personalized)
         const isPersonalized = personalizedRef.current !== null;
@@ -245,9 +262,10 @@ export default function CosmosBackground({
         ctx.restore();
       });
 
-      // Draw stars with twinkling
+      // Draw stars with twinkling (or static if reduced motion)
       starsRef.current.forEach((star) => {
-        const twinkle = Math.sin(time * star.twinkleSpeed + star.twinkleOffset);
+        // Disable twinkling animation when reduced motion is preferred
+        const twinkle = prefersReducedMotion ? 0 : Math.sin(time * star.twinkleSpeed + star.twinkleOffset);
         const currentOpacity = star.opacity + twinkle * 0.2;
 
         ctx.beginPath();
@@ -286,7 +304,7 @@ export default function CosmosBackground({
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationId);
     };
-  }, []);
+  }, [prefersReducedMotion]);
 
   return (
     <canvas

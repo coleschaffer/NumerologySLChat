@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { ConversationPhase } from '@/lib/phaseConfig';
 import { getPhaseConfig, shouldShowInput } from '@/lib/phaseConfig';
 
@@ -14,6 +14,7 @@ interface UserInputProps {
 export default function UserInput({ phase, onSubmit, disabled }: UserInputProps) {
   const [textValue, setTextValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const shouldReduceMotion = useReducedMotion();
 
   // Get phase configuration
   const config = getPhaseConfig(phase);
@@ -64,9 +65,10 @@ export default function UserInput({ phase, onSubmit, disabled }: UserInputProps)
   return (
     <AnimatePresence>
       <motion.form
-        initial={{ opacity: 0, y: 20 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
+        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
         onSubmit={handleSubmit}
         className="px-4 py-4"
       >

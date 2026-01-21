@@ -1,13 +1,16 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 export default function TypingIndicator() {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       className="flex items-center gap-3 px-4 py-3"
     >
       <div className="flex items-center gap-2 px-4 py-3 rounded-2xl oracle-border">

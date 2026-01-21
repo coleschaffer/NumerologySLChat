@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import type { getLifePathCalculationSteps } from '@/lib/numerology';
 
@@ -13,15 +13,16 @@ interface CalculationVisualProps {
  * CalculationVisual - Shows detailed numerology calculation breakdown
  */
 export default function CalculationVisual({ steps, onStepChange }: CalculationVisualProps) {
+  const shouldReduceMotion = useReducedMotion();
   const [visibleSteps, setVisibleSteps] = useState(0);
   const [showSummation, setShowSummation] = useState(false);
   const [showReduction, setShowReduction] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
 
-  // Generate floating particles
+  // Generate floating particles (reduced count for performance)
   const particles = useMemo(() => {
-    return Array.from({ length: 15 }, (_, i) => ({
+    return Array.from({ length: 8 }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
       y: Math.random() * 100,
@@ -138,55 +139,55 @@ export default function CalculationVisual({ steps, onStepChange }: CalculationVi
   return (
     <div className="my-6 mx-auto max-w-lg w-full relative">
       {/* Floating particles background */}
-      <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
-        {particles.map((particle) => (
-          <motion.div
-            key={particle.id}
-            className="absolute rounded-full bg-[#d4af37]"
-            style={{
-              width: particle.size,
-              height: particle.size,
-              left: `${particle.x}%`,
-              top: `${particle.y}%`,
-            }}
-            animate={{
-              y: [0, -20, 0],
-              opacity: [0.2, 0.5, 0.2],
-              scale: [1, 1.2, 1],
-            }}
-            transition={{
-              duration: particle.duration,
-              delay: particle.delay,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-          />
-        ))}
-      </div>
+      {!shouldReduceMotion && (
+        <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+          {particles.map((particle) => (
+            <motion.div
+              key={particle.id}
+              className="absolute rounded-full bg-[#d4af37]"
+              style={{
+                width: particle.size,
+                height: particle.size,
+                left: `${particle.x}%`,
+                top: `${particle.y}%`,
+                willChange: 'transform, opacity',
+              }}
+              animate={{
+                y: [0, -20, 0],
+                opacity: [0.2, 0.5, 0.2],
+                scale: [1, 1.2, 1],
+              }}
+              transition={{
+                duration: particle.duration,
+                delay: particle.delay,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Outer glow */}
+      {/* Outer glow - uses opacity animation instead of boxShadow for performance */}
       <motion.div
-        className="absolute inset-0 rounded-2xl"
-        animate={{
-          boxShadow: [
-            '0 0 20px rgba(212, 175, 55, 0.1), inset 0 0 20px rgba(212, 175, 55, 0.05)',
-            '0 0 40px rgba(212, 175, 55, 0.15), inset 0 0 40px rgba(212, 175, 55, 0.08)',
-            '0 0 20px rgba(212, 175, 55, 0.1), inset 0 0 20px rgba(212, 175, 55, 0.05)',
-          ],
+        className="absolute inset-0 rounded-2xl pointer-events-none"
+        style={{
+          boxShadow: '0 0 30px rgba(212, 175, 55, 0.15), inset 0 0 30px rgba(212, 175, 55, 0.08)',
         }}
+        animate={shouldReduceMotion ? {} : { opacity: [0.7, 1, 0.7] }}
         transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
       />
 
       <div className="relative bg-gradient-to-b from-[#0a0a1a]/90 to-[#1a0a2e]/90 backdrop-blur-sm rounded-2xl p-5 border border-[#d4af37]/30">
         {/* Title */}
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
           className="text-center mb-5"
         >
           <motion.div
-            animate={{ opacity: [0.5, 1, 0.5] }}
+            animate={shouldReduceMotion ? {} : { opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 2, repeat: Infinity }}
             className="text-xs text-[#d4af37]/60 uppercase tracking-[0.3em] mb-1"
           >
@@ -199,9 +200,9 @@ export default function CalculationVisual({ steps, onStepChange }: CalculationVi
             YOUR BIRTH NUMBERS
           </h3>
           <motion.div
-            initial={{ scaleX: 0 }}
+            initial={shouldReduceMotion ? false : { scaleX: 0 }}
             animate={{ scaleX: 1 }}
-            transition={{ delay: 0.3, duration: 0.5 }}
+            transition={{ delay: shouldReduceMotion ? 0 : 0.2, duration: 0.3, ease: 'easeOut' }}
             className="h-px bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent mt-3"
           />
         </motion.div>
@@ -212,9 +213,9 @@ export default function CalculationVisual({ steps, onStepChange }: CalculationVi
             {stepData.slice(0, visibleSteps).map((step, index) => (
               <motion.div
                 key={index}
-                initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                initial={shouldReduceMotion ? false : { opacity: 0, x: -10, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
                 className="flex flex-col gap-1.5 p-3 rounded-lg bg-white/5 border border-[#d4af37]/20"
               >
                 {/* Row 1: Label and original value */}

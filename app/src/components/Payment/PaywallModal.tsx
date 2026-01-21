@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useState } from 'react';
 import { useConversationStore } from '@/store/conversationStore';
 
@@ -74,6 +74,7 @@ const testimonials = [
 ];
 
 export default function PaywallModal({ isPersonalOnly = false }: PaywallModalProps) {
+  const shouldReduceMotion = useReducedMotion();
   const [selectedTier, setSelectedTier] = useState(isPersonalOnly ? 1 : 2);
   const [isProcessing, setIsProcessing] = useState(false);
   const { setPaid, otherPerson, compatibility, addOracleMessages, setPhase } =
@@ -137,15 +138,17 @@ export default function PaywallModal({ isPersonalOnly = false }: PaywallModalPro
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0 }}
+        initial={shouldReduceMotion ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
       >
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={shouldReduceMotion ? false : { scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
+          exit={shouldReduceMotion ? { opacity: 0 } : { scale: 0.95, opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
           className="w-full max-w-3xl bg-gradient-to-br from-[#0a0a1a] to-[#1a0a2e] rounded-2xl border border-[#d4af37]/30 overflow-hidden my-4"
         >
           {/* Header */}
@@ -165,7 +168,7 @@ export default function PaywallModal({ isPersonalOnly = false }: PaywallModalPro
             {(isPersonalOnly ? tiers.filter(t => t.id === 1) : tiers).map((tier) => (
               <motion.button
                 key={tier.id}
-                whileHover={{ scale: 1.02 }}
+                whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setSelectedTier(tier.id)}
                 className={`relative p-5 rounded-xl text-left transition-all ${
@@ -238,7 +241,7 @@ export default function PaywallModal({ isPersonalOnly = false }: PaywallModalPro
           {/* CTA */}
           <div className="px-6 py-5 border-t border-[#d4af37]/20 bg-black/20">
             <motion.button
-              whileHover={{ scale: 1.02 }}
+              whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handlePurchase}
               disabled={isProcessing}

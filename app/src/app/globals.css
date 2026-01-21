@@ -154,7 +154,7 @@ body {
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp 0.5s ease-out forwards;
+  animation: fadeInUp 0.3s ease-out forwards;
 }
 
 /* Star twinkle */
@@ -170,5 +170,32 @@ body {
   }
   100% {
     background-position: -200% 0;
+  }
+}
+
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .number-pulse,
+  .typing-dot,
+  .animate-fade-in-up {
+    animation: none;
+  }
+
+  .typing-dot {
+    opacity: 1;
+  }
+
+  /* Disable shimmer text animation */
+  .shimmer-text {
+    animation: none !important;
+  }
+
+  /* Reduce all transitions to near-instant */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

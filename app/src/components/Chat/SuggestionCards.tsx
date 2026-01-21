@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { ConversationPhase } from '@/lib/phaseConfig';
 import { shouldShowSuggestions } from '@/lib/phaseConfig';
 
@@ -27,6 +27,8 @@ export default function SuggestionCards({
   dynamicSuggestions,
   isLoading,
 }: SuggestionCardsProps) {
+  const shouldReduceMotion = useReducedMotion();
+
   // Check if suggestions should be shown for this phase
   if (!shouldShowSuggestions(phase)) {
     return null;
@@ -49,10 +51,10 @@ export default function SuggestionCards({
     <AnimatePresence mode="wait">
       <motion.div
         key={phase}
-        initial={{ opacity: 0, y: 20 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        transition={{ duration: 0.3 }}
+        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
         className="flex flex-wrap gap-2 justify-center px-4 py-3"
       >
         {isLoading ? (
@@ -61,9 +63,9 @@ export default function SuggestionCards({
             {[1, 2, 3].map((i) => (
               <motion.div
                 key={`loading-${i}`}
-                initial={{ opacity: 0 }}
+                initial={shouldReduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.1 }}
+                transition={{ delay: shouldReduceMotion ? 0 : i * 0.08, ease: 'easeOut' }}
                 className="px-6 py-2.5 rounded-full bg-white/5 border border-white/10 animate-pulse"
               >
                 <div className="h-4 w-24 bg-white/10 rounded" />
@@ -74,10 +76,10 @@ export default function SuggestionCards({
           processedSuggestions.map((suggestion, index) => (
             <motion.button
               key={suggestion}
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ scale: 1.02, y: -2 }}
+              transition={{ delay: shouldReduceMotion ? 0 : index * 0.08, ease: 'easeOut' }}
+              whileHover={shouldReduceMotion ? {} : { scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onSelect(suggestion)}
               className={`px-4 py-2.5 rounded-full text-sm transition-all ${getButtonStyle(suggestion)}`}

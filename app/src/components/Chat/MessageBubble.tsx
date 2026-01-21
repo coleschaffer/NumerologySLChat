@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
 import type { Message } from '@/store/conversationStore';
 import type { NormalizedAlignment } from '@/hooks/useVoiceoverStreaming';
@@ -54,6 +54,7 @@ export default function MessageBubble({
   isSpeaking,
   onCalculationStepChange,
 }: MessageBubbleProps) {
+  const shouldReduceMotion = useReducedMotion();
   const isOracle = message.type === 'oracle';
   const isUser = message.type === 'user';
   const isNumberReveal = message.type === 'number-reveal';
@@ -81,9 +82,9 @@ export default function MessageBubble({
   if (isNumberReveal && message.metadata?.number) {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
         className="flex justify-center my-6"
       >
         <NumberReveal number={message.metadata.number} />
@@ -94,9 +95,9 @@ export default function MessageBubble({
   if (isCalculation && message.metadata?.calculationSteps) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
         className="flex justify-center my-4"
       >
         <CalculationVisual
@@ -111,9 +112,9 @@ export default function MessageBubble({
     const { name, number, label, numberType } = message.metadata.letterTransform;
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
         className="flex justify-center my-4"
       >
         <LetterTransform
@@ -128,9 +129,9 @@ export default function MessageBubble({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} px-4 py-2`}
     >
       <div
