@@ -92,6 +92,10 @@ export type DateParseErrorCode =
 export interface ParsedDate {
   date: Date;
   formatted: string;
+  /** Whether this is a partial date (estimated day or month) */
+  isPartial?: boolean;
+  /** Type of partial date: 'year-only' or 'month-year' */
+  partialType?: 'year-only' | 'month-year';
 }
 
 export interface ParseError {
@@ -151,6 +155,98 @@ function isOffTopicInput(input: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Try to parse a partial date (year only, or month + year)
+ * Returns null if not a valid partial date
+ *
+ * Examples:
+ * - "1965" → Jan 1, 1965 (year-only)
+ * - "May 1965" → May 15, 1965 (month-year)
+ * - "sometime in 1965" → Jan 1, 1965 (year-only)
+ * - "around March 1990" → March 15, 1990 (month-year)
+ */
+function tryParsePartialDate(input: string): ParsedDate | null {
+  const cleaned = input.trim().toLowerCase();
+
+  // Remove common vague phrases
+  const withoutVague = cleaned
+    .replace(/^(sometime|around|about|roughly|approximately|in|during)\s+/gi, '')
+    .replace(/\s+(or so|ish|maybe|i think)$/gi, '')
+    .trim();
+
+  // Pattern 1: Year only (e.g., "1965", "1990")
+  const yearOnlyMatch = withoutVague.match(/^(\d{4})$/);
+  if (yearOnlyMatch) {
+    const year = parseInt(yearOnlyMatch[1], 10);
+    const currentYear = new Date().getFullYear();
+    if (year >= 1900 && year <= currentYear) {
+      // Use January 1st as default
+      const date = new Date(year, 0, 1, 12, 0, 0);
+      return {
+        date,
+        formatted: year.toString(),
+        isPartial: true,
+        partialType: 'year-only',
+      };
+    }
+  }
+
+  // Pattern 2: Month + Year (e.g., "May 1965", "march 1990")
+  const monthYearMatch = withoutVague.match(/^([a-z]+)\s+(\d{4})$/);
+  if (monthYearMatch) {
+    const monthStr = monthYearMatch[1];
+    const year = parseInt(monthYearMatch[2], 10);
+    const month = fuzzyMatchMonth(monthStr);
+
+    if (month !== undefined) {
+      const currentYear = new Date().getFullYear();
+      if (year >= 1900 && year <= currentYear) {
+        // Use the 15th as default day (middle of month)
+        const date = new Date(year, month, 15, 12, 0, 0);
+
+        // Verify the date isn't in the future
+        if (date <= new Date()) {
+          const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+          return {
+            date,
+            formatted: `${monthName} ${year}`,
+            isPartial: true,
+            partialType: 'month-year',
+          };
+        }
+      }
+    }
+  }
+
+  // Pattern 3: Month abbreviation + Year (e.g., "May '65", "Mar '90")
+  const monthAbbrevYearMatch = withoutVague.match(/^([a-z]+)\s*'?(\d{2})$/);
+  if (monthAbbrevYearMatch) {
+    const monthStr = monthAbbrevYearMatch[1];
+    const yearShort = parseInt(monthAbbrevYearMatch[2], 10);
+    const month = fuzzyMatchMonth(monthStr);
+
+    if (month !== undefined) {
+      const year = normalizeYear(yearShort);
+      const currentYear = new Date().getFullYear();
+      if (year >= 1900 && year <= currentYear) {
+        const date = new Date(year, month, 15, 12, 0, 0);
+
+        if (date <= new Date()) {
+          const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+          return {
+            date,
+            formatted: `${monthName} ${year}`,
+            isPartial: true,
+            partialType: 'month-year',
+          };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 export function parseDateString(input: string): ParseResult {
@@ -233,6 +329,13 @@ export function parseDateString(input: string): ParseResult {
 
   // Validate parsed values
   if (month === undefined || day === undefined || year === undefined) {
+    // Try partial date parsing as a fallback
+    const partialResult = tryParsePartialDate(originalInput);
+    if (partialResult) {
+      console.log('[dateParser] Parsed as partial date:', partialResult);
+      return partialResult;
+    }
+
     return {
       errorCode: 'UNRECOGNIZED_FORMAT',
       originalInput,

@@ -7,7 +7,10 @@ import type { NormalizedAlignment } from '@/hooks/useVoiceoverStreaming';
 import NumberReveal from '../Numerology/NumberReveal';
 import CalculationVisual from '../Numerology/CalculationVisual';
 import LetterTransform from '../Numerology/LetterTransform';
+import ConstellationReveal from '../Numerology/ConstellationReveal';
+import PersonalYearReveal from '../Numerology/PersonalYearReveal';
 import TypewriterText from './TypewriterText';
+import LockedFeatureCard, { detectLockedSections } from './LockedFeatureCard';
 
 interface MessageBubbleProps {
   message: Message;
@@ -60,6 +63,8 @@ export default function MessageBubble({
   const isNumberReveal = message.type === 'number-reveal';
   const isCalculation = message.type === 'calculation';
   const isLetterTransform = message.type === 'letter-transform';
+  const isConstellationReveal = message.type === 'constellation-reveal';
+  const isPersonalYearReveal = message.type === 'personal-year-reveal';
 
   // Track if this message's animation has completed
   const [hasAnimated, setHasAnimated] = useState(false);
@@ -73,6 +78,9 @@ export default function MessageBubble({
       setHasAnimated(true);
     }
   }, [isLatest, isOracle]);
+
+  // Strip markdown bold syntax from content (e.g., **THE BOND** → THE BOND)
+  const processedContent = message.content.replace(/\*\*(.*?)\*\*/g, '$1');
 
   const handleTypingComplete = useCallback(() => {
     setHasAnimated(true);
@@ -127,6 +135,66 @@ export default function MessageBubble({
     );
   }
 
+  if (isConstellationReveal && message.metadata?.constellationReveal) {
+    const { number, label } = message.metadata.constellationReveal;
+    return (
+      <motion.div
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="flex justify-center my-4"
+      >
+        <ConstellationReveal
+          number={number}
+          label={label}
+          persist={true}
+        />
+      </motion.div>
+    );
+  }
+
+  if (isPersonalYearReveal && message.metadata?.personalYearReveal) {
+    const { year } = message.metadata.personalYearReveal;
+    return (
+      <motion.div
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="flex justify-center my-4"
+      >
+        <PersonalYearReveal
+          year={year}
+          persist={true}
+        />
+      </motion.div>
+    );
+  }
+
+  // Check for locked sections in oracle messages
+  const lockedSections = isOracle ? detectLockedSections(message.content) : [];
+
+  // If message contains locked sections, render as LockedFeatureCard
+  if (lockedSections.length > 0) {
+    return (
+      <motion.div
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
+        className="flex justify-start px-4 py-2"
+      >
+        <div className="max-w-[85%] md:max-w-[70%]">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-[#d4af37] glow-gold" />
+            <span className="text-xs text-[#d4af37]/70 uppercase tracking-wider font-medium">
+              The Oracle
+            </span>
+          </div>
+          <LockedFeatureCard sections={lockedSections} />
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
@@ -162,7 +230,7 @@ export default function MessageBubble({
         >
           {shouldAnimate ? (
             <TypewriterText
-              text={message.content}
+              text={processedContent}
               duration={typingDuration}
               onComplete={handleTypingComplete}
               alignment={alignment}
@@ -170,7 +238,7 @@ export default function MessageBubble({
               isAudioPlaying={isAudioPlaying}
             />
           ) : (
-            message.content
+            processedContent
           )}
         </p>
       </div>

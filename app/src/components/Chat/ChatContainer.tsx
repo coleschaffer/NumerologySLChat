@@ -410,10 +410,23 @@ export default function ChatContainer() {
         setUserDOB(parseResult.date);
         setPhase('revealing_birth_numbers');
 
-        await speakOracleMessages([
-          "I see it now...",
-          "Let me decode the vibrations hidden in your birth date...",
-        ]);
+        // Handle partial dates with appropriate messaging
+        if (parseResult.isPartial) {
+          const partialMsg = parseResult.partialType === 'year-only'
+            ? "The exact day is hidden from me, but the year itself carries powerful vibrations..."
+            : "The day remains uncertain, yet the cosmic signature of that month holds truth...";
+
+          await speakOracleMessages([
+            "I sense you may not remember the exact date...",
+            partialMsg,
+            "Let me work with what the universe has revealed...",
+          ]);
+        } else {
+          await speakOracleMessages([
+            "I see it now...",
+            "Let me decode the vibrations hidden in your birth date...",
+          ]);
+        }
 
         // Add calculation visualization AFTER the "decode" message
         const calculationSteps = getLifePathCalculationSteps(parseResult.date);
@@ -507,6 +520,7 @@ export default function ChatContainer() {
     else if (phase === 'oracle_question_1') {
       addMessage({ type: 'user', content: trimmedValue });
       clearDynamicSuggestions();
+      setTyping(true); // Show typing immediately while AI generates
 
       // Get AI-personalized acknowledgment based on what they said
       const acknowledgment = await getAIAcknowledgment(
@@ -625,6 +639,7 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'oracle_question_2') {
       addMessage({ type: 'user', content: trimmedValue });
+      setTyping(true); // Show typing immediately while AI generates
 
       const profile = useConversationStore.getState().userProfile;
 
@@ -644,6 +659,20 @@ export default function ChatContainer() {
 
       playSound('chime');
       setPhase('revealing_soul_urge');
+
+      // Add constellation animation for Soul Urge
+      addMessage({
+        type: 'constellation-reveal',
+        content: 'Your soul urge revealed',
+        metadata: {
+          constellationReveal: {
+            number: profile.soulUrge!,
+            label: 'Soul Urge',
+          },
+        },
+      });
+      scrollToBottom();
+      await new Promise((resolve) => setTimeout(resolve, 4000));
 
       await speakOracleMessages([
         `Your Soul Urge is ${profile.soulUrge}.`,
@@ -672,6 +701,22 @@ export default function ChatContainer() {
 
         await speakOracleMessages([
           `I see much about you now, ${firstName}.`,
+        ]);
+
+        // Add Personal Year animation
+        addMessage({
+          type: 'personal-year-reveal',
+          content: 'Your personal year cycle',
+          metadata: {
+            personalYearReveal: {
+              year: criticalDates.personalYear,
+            },
+          },
+        });
+        scrollToBottom();
+        await new Promise((resolve) => setTimeout(resolve, 4500));
+
+        await speakOracleMessages([
           `You are in a Personal Year ${criticalDates.personalYear}.`,
         ]);
 
@@ -722,6 +767,7 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'oracle_question_other_person') {
       addMessage({ type: 'user', content: trimmedValue });
+      setTyping(true); // Show typing immediately while AI generates
 
       // Check if they want to skip
       if (trimmedValue.toLowerCase().includes('skip') || trimmedValue.toLowerCase().includes('myself')) {
@@ -729,7 +775,62 @@ export default function ChatContainer() {
         return;
       }
 
-      // AI-personalized acknowledgment of who they're thinking about
+      // Extract name and relationship from user's message
+      const extracted = extractNameAndRelationship(trimmedValue);
+
+      // If both name and relationship were provided, skip ahead to collecting DOB
+      if (extracted.name && extracted.relationship) {
+        setOtherPerson(extracted.name);
+
+        // AI-personalized acknowledgment that understands both pieces of info
+        const acknowledgment = await getAIAcknowledgment(
+          trimmedValue,
+          {
+            userName: userProfile.fullName,
+            lifePath: userProfile.lifePath,
+            extractedOtherName: extracted.name,
+            extractedRelationship: extracted.relationship,
+          },
+          phase
+        );
+
+        await speakOracleMessages([
+          acknowledgment[0] || `${extracted.name}... your ${extracted.relationship}.`,
+          "The bond between you runs deep in the numbers.",
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        await speakOracleMessages([
+          `Do you know when ${extracted.name} was born? This will unlock the compatibility between you.`,
+        ]);
+
+        setPhase('collecting_other_dob');
+        return;
+      }
+
+      // If only name was provided, skip to relationship question
+      if (extracted.name) {
+        setOtherPerson(extracted.name);
+
+        await speakOracleMessages([
+          `${extracted.name}...`,
+          "I sense the weight of this connection in your mind.",
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        await speakOracleMessages([
+          "What is your relationship with them?",
+          "What draws you to understand this connection?",
+        ]);
+
+        setPhase('oracle_question_relationship');
+        generateSuggestions("What draws you to understand this connection?");
+        return;
+      }
+
+      // Default flow - no name or relationship extracted
       const acknowledgment = await getAIAcknowledgment(
         trimmedValue,
         {
@@ -782,6 +883,7 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'oracle_question_relationship') {
       addMessage({ type: 'user', content: trimmedValue });
+      setTyping(true); // Show typing immediately while AI generates
 
       const otherName = useConversationStore.getState().otherPerson?.name || 'them';
 
@@ -840,6 +942,15 @@ export default function ChatContainer() {
       const compat = state.compatibility;
       const otherName = state.otherPerson?.name || 'them';
       const userName = state.userProfile.fullName?.split(' ')[0] || 'you';
+
+      // Handle partial dates with appropriate messaging
+      if (parseResult.isPartial) {
+        await speakOracleMessages([
+          "The exact date is veiled in uncertainty...",
+          "But I can still read the essence of their cosmic signature.",
+        ]);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
 
       if (otherLifePath && compat) {
         // AI-personalized compatibility reveal
@@ -980,6 +1091,7 @@ export default function ChatContainer() {
     // ----------------------------------------
     else if (phase === 'oracle_final_question') {
       addMessage({ type: 'user', content: trimmedValue });
+      setTyping(true); // Show typing immediately while AI generates
 
       // AI-personalized acknowledgment of their burning question
       const acknowledgment = await getAIAcknowledgment(
@@ -1281,4 +1393,102 @@ function getPersonalYearTheme(year: number): string {
     33: 'teaching and healing others',
   };
   return themes[year] || 'transformation';
+}
+
+/**
+ * Extract name and relationship from user input
+ * Handles patterns like:
+ * - "lyz my mom" → { name: "Lyz", relationship: "mom" }
+ * - "my mom lyz" → { name: "Lyz", relationship: "mom" }
+ * - "sarah, she's my sister" → { name: "Sarah", relationship: "sister" }
+ * - "my boyfriend john" → { name: "John", relationship: "boyfriend" }
+ */
+function extractNameAndRelationship(input: string): { name?: string; relationship?: string } {
+  const lowered = input.toLowerCase().trim();
+
+  // Common relationship keywords
+  const relationships = [
+    'mom', 'mother', 'dad', 'father', 'parent',
+    'sister', 'brother', 'sibling',
+    'wife', 'husband', 'spouse', 'partner',
+    'boyfriend', 'girlfriend', 'fiancé', 'fiancee', 'fiance',
+    'friend', 'best friend', 'bestfriend',
+    'boss', 'coworker', 'colleague',
+    'ex', 'ex-boyfriend', 'ex-girlfriend', 'ex-husband', 'ex-wife',
+    'son', 'daughter', 'child',
+    'aunt', 'uncle', 'cousin', 'grandma', 'grandpa', 'grandmother', 'grandfather',
+  ];
+
+  let foundName: string | undefined;
+  let foundRelationship: string | undefined;
+
+  // Pattern 1: "name my relationship" (e.g., "lyz my mom")
+  const pattern1 = /^(\w+)\s+my\s+(\w+(?:\s+\w+)?)$/i;
+  const match1 = input.match(pattern1);
+  if (match1) {
+    const potentialName = match1[1];
+    const potentialRelation = match1[2].toLowerCase();
+    if (relationships.some(r => potentialRelation.includes(r))) {
+      foundName = potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
+      foundRelationship = potentialRelation;
+    }
+  }
+
+  // Pattern 2: "my relationship name" (e.g., "my mom lyz")
+  if (!foundName) {
+    const pattern2 = /^my\s+(\w+(?:\s+\w+)?)\s+(\w+)$/i;
+    const match2 = input.match(pattern2);
+    if (match2) {
+      const potentialRelation = match2[1].toLowerCase();
+      const potentialName = match2[2];
+      if (relationships.some(r => potentialRelation.includes(r))) {
+        foundName = potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
+        foundRelationship = potentialRelation;
+      }
+    }
+  }
+
+  // Pattern 3: "name, relationship" or "name - relationship" (e.g., "sarah, my sister")
+  if (!foundName) {
+    const pattern3 = /^(\w+)[,\-\s]+(?:my\s+|she'?s?\s+my\s+|he'?s?\s+my\s+)?(\w+(?:\s+\w+)?)$/i;
+    const match3 = input.match(pattern3);
+    if (match3) {
+      const potentialName = match3[1];
+      const potentialRelation = match3[2].toLowerCase();
+      if (relationships.some(r => potentialRelation.includes(r))) {
+        foundName = potentialName.charAt(0).toUpperCase() + potentialName.slice(1).toLowerCase();
+        foundRelationship = potentialRelation;
+      }
+    }
+  }
+
+  // If we found a relationship but no name, or input looks like just a name
+  if (!foundName && !foundRelationship) {
+    // Check if input contains a relationship word
+    for (const rel of relationships) {
+      if (lowered.includes(rel)) {
+        foundRelationship = rel;
+        // Try to extract name - take the first word that's not part of the relationship phrase
+        const words = input.split(/[\s,]+/).filter(w => w.length > 0);
+        for (const word of words) {
+          const wordLower = word.toLowerCase();
+          if (!['my', 'the', 'a', 'an', 'is', 'she', 'he', "she's", "he's", 's'].includes(wordLower) &&
+              !relationships.some(r => wordLower === r)) {
+            foundName = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // If still no name found, check if it's just a simple name (single or two words)
+  if (!foundName && !foundRelationship && /^[a-z]+(\s+[a-z]+)?$/i.test(input.trim())) {
+    // Just a name was provided
+    const words = input.trim().split(/\s+/);
+    foundName = words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
+  return { name: foundName, relationship: foundRelationship };
 }

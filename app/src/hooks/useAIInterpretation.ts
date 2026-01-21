@@ -13,6 +13,8 @@ interface UserContext {
   lifePath?: number | null;
   expression?: number | null;
   soulUrge?: number | null;
+  extractedOtherName?: string;
+  extractedRelationship?: string;
 }
 
 interface AIInterpretation {

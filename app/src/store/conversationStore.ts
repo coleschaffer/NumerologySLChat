@@ -13,7 +13,7 @@ import type { ConversationPhase } from '@/lib/phaseConfig';
 // Re-export the phase type for convenience
 export type { ConversationPhase } from '@/lib/phaseConfig';
 
-export type MessageType = 'oracle' | 'user' | 'system' | 'number-reveal' | 'calculation' | 'letter-transform';
+export type MessageType = 'oracle' | 'user' | 'system' | 'number-reveal' | 'calculation' | 'letter-transform' | 'constellation-reveal' | 'personal-year-reveal';
 
 export interface Message {
   id: string;
@@ -32,6 +32,15 @@ export interface Message {
       number: number;
       label: string;
       numberType: 'expression' | 'soul-urge' | 'personality';
+    };
+    // For constellation-reveal message type
+    constellationReveal?: {
+      number: number;
+      label: string;
+    };
+    // For personal-year-reveal message type
+    personalYearReveal?: {
+      year: number;
     };
   };
 }
