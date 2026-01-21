@@ -12,6 +12,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useConversationStore } from '@/store/conversationStore';
 import type { ConversationPhase } from '@/lib/phaseConfig';
 import { shouldShowSuggestions } from '@/lib/phaseConfig';
+import { fetchWithTimeout, isTimeoutError } from '@/lib/fetchWithTimeout';
 
 interface DynamicSuggestionsState {
   suggestions: string[];
@@ -116,30 +117,34 @@ export function useDynamicSuggestions(): UseDynamicSuggestionsReturn {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        const response = await fetch('/api/oracle', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const response = await fetchWithTimeout(
+          '/api/oracle',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              mode: 'suggestions',
+              context: {
+                userName: userProfile.fullName,
+                lifePath: userProfile.lifePath,
+                expression: userProfile.expression,
+                soulUrge: userProfile.soulUrge,
+                otherPersonName: otherPerson?.name,
+                otherLifePath: otherPerson?.lifePath,
+                compatibilityScore: compatibility?.score,
+              },
+              phase,
+              baseMessages: [], // Not used for suggestions mode
+              suggestions: {
+                oracleQuestion,
+                count: 3,
+              },
+            }),
           },
-          body: JSON.stringify({
-            mode: 'suggestions',
-            context: {
-              userName: userProfile.fullName,
-              lifePath: userProfile.lifePath,
-              expression: userProfile.expression,
-              soulUrge: userProfile.soulUrge,
-              otherPersonName: otherPerson?.name,
-              otherLifePath: otherPerson?.lifePath,
-              compatibilityScore: compatibility?.score,
-            },
-            phase,
-            baseMessages: [], // Not used for suggestions mode
-            suggestions: {
-              oracleQuestion,
-              count: 3,
-            },
-          }),
-        });
+          5000 // 5 second timeout for suggestions - they're less critical
+        );
 
         if (!response.ok) {
           throw new Error(`API returned ${response.status}`);
@@ -163,13 +168,17 @@ export function useDynamicSuggestions(): UseDynamicSuggestionsReturn {
           });
         }
       } catch (error) {
-        console.error('Failed to generate suggestions:', error);
+        if (isTimeoutError(error)) {
+          console.warn('[useDynamicSuggestions] Request timed out, using fallback suggestions');
+        } else {
+          console.error('Failed to generate suggestions:', error);
+        }
         // Fall back to phase-based suggestions
         const fallback = fallbackSuggestions[phase] || [];
         setState({
           suggestions: fallback,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: isTimeoutError(error) ? 'timeout' : (error instanceof Error ? error.message : 'Unknown error'),
         });
       }
     },

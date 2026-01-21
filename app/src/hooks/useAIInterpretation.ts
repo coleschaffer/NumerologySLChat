@@ -7,6 +7,7 @@
 
 import { useCallback } from 'react';
 import { getLifePathInterpretation } from '@/lib/interpretations';
+import { fetchWithTimeout, isTimeoutError, TIMEOUT_FALLBACKS } from '@/lib/fetchWithTimeout';
 
 interface UserContext {
   userName?: string | null;
@@ -41,30 +42,34 @@ async function fetchAIInterpretation(
   if (!baseInterp) return null;
 
   try {
-    const response = await fetch('/api/oracle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'interpret',
-        context: {
-          userName: context.userName || undefined,
-          lifePath: context.lifePath || undefined,
-          expression: context.expression || undefined,
-          soulUrge: context.soulUrge || undefined,
-        },
-        phase: 'interpretation',
-        baseMessages: [],
-        interpret: {
-          numberType,
-          number,
-          baseInterpretation: {
-            name: baseInterp.name,
-            shortDescription: baseInterp.shortDescription,
-            coreDescription: baseInterp.coreDescription,
+    const response = await fetchWithTimeout(
+      '/api/oracle',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'interpret',
+          context: {
+            userName: context.userName || undefined,
+            lifePath: context.lifePath || undefined,
+            expression: context.expression || undefined,
+            soulUrge: context.soulUrge || undefined,
           },
-        },
-      }),
-    });
+          phase: 'interpretation',
+          baseMessages: [],
+          interpret: {
+            numberType,
+            number,
+            baseInterpretation: {
+              name: baseInterp.name,
+              shortDescription: baseInterp.shortDescription,
+              coreDescription: baseInterp.coreDescription,
+            },
+          },
+        }),
+      },
+      10000 // 10 second timeout for interpretations - longer content
+    );
 
     if (!response.ok) {
       console.error('[useAIInterpretation] API error:', response.status);
@@ -79,7 +84,11 @@ async function fetchAIInterpretation(
 
     return null;
   } catch (error) {
-    console.error('[useAIInterpretation] Failed to fetch:', error);
+    if (isTimeoutError(error)) {
+      console.warn('[useAIInterpretation] Request timed out');
+    } else {
+      console.error('[useAIInterpretation] Failed to fetch:', error);
+    }
     return null;
   }
 }
@@ -132,36 +141,46 @@ export async function getAIAcknowledgment(
   context: UserContext,
   phase: string
 ): Promise<string[]> {
+  const fallback = TIMEOUT_FALLBACKS.acknowledgment;
+
   try {
-    const response = await fetch('/api/oracle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'enhance',
-        context: {
-          userName: context.userName || undefined,
-          lifePath: context.lifePath || undefined,
-          expression: context.expression || undefined,
-          soulUrge: context.soulUrge || undefined,
-        },
-        phase,
-        baseMessages: [
-          "I hear the truth in your words...",
-          "Your awareness is shifting.",
-        ],
-        userInput,
-      }),
-    });
+    const response = await fetchWithTimeout(
+      '/api/oracle',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'enhance',
+          context: {
+            userName: context.userName || undefined,
+            lifePath: context.lifePath || undefined,
+            expression: context.expression || undefined,
+            soulUrge: context.soulUrge || undefined,
+          },
+          phase,
+          baseMessages: [
+            "I hear the truth in your words...",
+            "Your awareness is shifting.",
+          ],
+          userInput,
+        }),
+      },
+      8000 // 8 second timeout for acknowledgments
+    );
 
     if (!response.ok) {
-      return ["I sense the depth of what you've shared...", "Your words carry weight."];
+      return fallback;
     }
 
     const data = await response.json();
-    return data.messages || ["I sense the depth of what you've shared...", "Your words carry weight."];
+    return data.messages?.length > 0 ? data.messages : fallback;
   } catch (error) {
-    console.error('[getAIAcknowledgment] Error:', error);
-    return ["I sense the depth of what you've shared...", "Your words carry weight."];
+    if (isTimeoutError(error)) {
+      console.warn('[getAIAcknowledgment] Request timed out');
+    } else {
+      console.error('[getAIAcknowledgment] Error:', error);
+    }
+    return fallback;
   }
 }
 
@@ -178,26 +197,30 @@ export async function getAICriticalDateExplanation(
   context: UserContext
 ): Promise<string> {
   try {
-    const response = await fetch('/api/oracle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'criticalDate',
-        context: {
-          userName: context.userName || undefined,
-          lifePath: context.lifePath || undefined,
-          expression: context.expression || undefined,
-          soulUrge: context.soulUrge || undefined,
-        },
-        phase: 'critical_date',
-        baseMessages: [],
-        criticalDate: {
-          date: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-          type,
-          baseDescription,
-        },
-      }),
-    });
+    const response = await fetchWithTimeout(
+      '/api/oracle',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'criticalDate',
+          context: {
+            userName: context.userName || undefined,
+            lifePath: context.lifePath || undefined,
+            expression: context.expression || undefined,
+            soulUrge: context.soulUrge || undefined,
+          },
+          phase: 'critical_date',
+          baseMessages: [],
+          criticalDate: {
+            date: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+            type,
+            baseDescription,
+          },
+        }),
+      },
+      8000 // 8 second timeout for critical date explanations
+    );
 
     if (!response.ok) {
       return baseDescription;
@@ -206,6 +229,10 @@ export async function getAICriticalDateExplanation(
     const data = await response.json();
     return data.explanation || baseDescription;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      console.warn('[getAICriticalDateExplanation] Request timed out');
+      return TIMEOUT_FALLBACKS.criticalDate;
+    }
     console.error('[getAICriticalDateExplanation] Error:', error);
     return baseDescription;
   }
@@ -232,24 +259,28 @@ export async function getAIYearAheadPrediction(
   fallback.full = `${fallback.theme}\n\n${fallback.opportunities}\n\n${fallback.challenges}`;
 
   try {
-    const response = await fetch('/api/oracle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'yearAhead',
-        context: {
-          userName: context.userName || undefined,
-          lifePath: context.lifePath || undefined,
-          expression: context.expression || undefined,
-          soulUrge: context.soulUrge || undefined,
-        },
-        phase: 'year_ahead',
-        baseMessages: [],
-        yearAhead: {
-          personalYear,
-        },
-      }),
-    });
+    const response = await fetchWithTimeout(
+      '/api/oracle',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'yearAhead',
+          context: {
+            userName: context.userName || undefined,
+            lifePath: context.lifePath || undefined,
+            expression: context.expression || undefined,
+            soulUrge: context.soulUrge || undefined,
+          },
+          phase: 'year_ahead',
+          baseMessages: [],
+          yearAhead: {
+            personalYear,
+          },
+        }),
+      },
+      10000 // 10 second timeout for year ahead predictions - more complex content
+    );
 
     if (!response.ok) {
       return fallback;
@@ -258,6 +289,10 @@ export async function getAIYearAheadPrediction(
     const data = await response.json();
     return data.prediction || fallback;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      console.warn('[getAIYearAheadPrediction] Request timed out');
+      return TIMEOUT_FALLBACKS.yearAhead;
+    }
     console.error('[getAIYearAheadPrediction] Error:', error);
     return fallback;
   }
@@ -284,28 +319,32 @@ export async function getAIRelationshipAdvice(
   const fallback = `The connection between Life Path ${context.lifePath} and ${otherLifePath} carries both harmony and challenge. Your bond has the potential for depth, but requires awareness and effort.`;
 
   try {
-    const response = await fetch('/api/oracle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'relationshipAdvice',
-        context: {
-          userName: context.userName || undefined,
-          lifePath: context.lifePath || undefined,
-          expression: context.expression || undefined,
-          soulUrge: context.soulUrge || undefined,
-        },
-        phase: 'relationship_advice',
-        baseMessages: [],
-        relationshipAdvice: {
-          otherName,
-          otherLifePath,
-          compatibilityScore: compatibility.score,
-          compatibilityLevel: compatibility.level,
-          areas: compatibility.areas,
-        },
-      }),
-    });
+    const response = await fetchWithTimeout(
+      '/api/oracle',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'relationshipAdvice',
+          context: {
+            userName: context.userName || undefined,
+            lifePath: context.lifePath || undefined,
+            expression: context.expression || undefined,
+            soulUrge: context.soulUrge || undefined,
+          },
+          phase: 'relationship_advice',
+          baseMessages: [],
+          relationshipAdvice: {
+            otherName,
+            otherLifePath,
+            compatibilityScore: compatibility.score,
+            compatibilityLevel: compatibility.level,
+            areas: compatibility.areas,
+          },
+        }),
+      },
+      10000 // 10 second timeout for relationship advice - longer content
+    );
 
     if (!response.ok) {
       return fallback;
@@ -314,6 +353,10 @@ export async function getAIRelationshipAdvice(
     const data = await response.json();
     return data.advice?.full || fallback;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      console.warn('[getAIRelationshipAdvice] Request timed out');
+      return TIMEOUT_FALLBACKS.relationshipAdvice;
+    }
     console.error('[getAIRelationshipAdvice] Error:', error);
     return fallback;
   }
@@ -344,29 +387,37 @@ export async function getAITransition(
   baseMessages: string[]
 ): Promise<string[]> {
   try {
-    const response = await fetch('/api/oracle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'enhance',
-        context: {
-          userName: context.userName || undefined,
-          lifePath: context.lifePath || undefined,
-          expression: context.expression || undefined,
-          soulUrge: context.soulUrge || undefined,
-        },
-        phase: `${fromPhase}_to_${toPhase}`,
-        baseMessages,
-      }),
-    });
+    const response = await fetchWithTimeout(
+      '/api/oracle',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'enhance',
+          context: {
+            userName: context.userName || undefined,
+            lifePath: context.lifePath || undefined,
+            expression: context.expression || undefined,
+            soulUrge: context.soulUrge || undefined,
+          },
+          phase: `${fromPhase}_to_${toPhase}`,
+          baseMessages,
+        }),
+      },
+      8000 // 8 second timeout for transitions
+    );
 
     if (!response.ok) {
       return baseMessages;
     }
 
     const data = await response.json();
-    return data.messages || baseMessages;
+    return data.messages?.length > 0 ? data.messages : baseMessages;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      console.warn('[getAITransition] Request timed out');
+      return TIMEOUT_FALLBACKS.transition;
+    }
     console.error('[getAITransition] Error:', error);
     return baseMessages;
   }

@@ -18,6 +18,10 @@ export interface PhaseInstruction {
   revealsNumbers?: boolean;
   /** Number of messages to generate (for multi-message sequences) */
   messageCount?: number;
+  /** How to redirect off-topic input back to this phase */
+  steeringGuidance?: string;
+  /** What to tease about upcoming reveals to create curiosity loops */
+  curiosityTeaser?: string;
 }
 
 export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> = {
@@ -39,6 +43,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'This is a collection phase - wait for user input',
     ],
     messageCount: 0,
+    steeringGuidance: "If off-topic, honor briefly then redirect: 'Your thoughts dance with curiosity... but the numbers need your birth date to begin their song. When were you born?'",
+    curiosityTeaser: "Once I have your birth date, I'll reveal the hidden pattern that's been shaping your entire life...",
   },
 
   revealing_birth_numbers: {
@@ -83,6 +89,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'End with a clear question that invites a response',
     ],
     messageCount: 1,
+    steeringGuidance: "Honor their response but guide back: 'I sense where your mind wanders... and the numbers will speak to that too. But first, tell me about how this Life Path energy shows up in your daily life.'",
+    curiosityTeaser: "What you share now will unlock a deeper reading about your hidden talents and soul's purpose...",
   },
 
   filler_to_expression: {
@@ -102,6 +110,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'This is a collection phase - wait for user input',
     ],
     messageCount: 0,
+    steeringGuidance: "If off-topic, redirect with intrigue: 'Names carry vibrations the universe recognizes... Your full birth name will unlock the next layer. What name were you given?'",
+    curiosityTeaser: "Your name holds your Expression Number - it reveals talents you may not even know you have...",
   },
 
   revealing_expression: {
@@ -124,6 +134,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'Make them reflect on their unique gifts',
     ],
     messageCount: 1,
+    steeringGuidance: "Honor their response but guide back: 'The threads of your thoughts weave through many realms... The numbers see it all. But tell me first about your gifts and how you share them.'",
+    curiosityTeaser: "Your answer will reveal how your Soul Urge - your deepest desires - interacts with your outer expression...",
   },
 
   filler_to_soul_urge: {
@@ -157,6 +169,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'Make it feel like natural intuition, not forced',
     ],
     messageCount: 1,
+    steeringGuidance: "Honor their response but guide back: 'I sense layers beneath your words... and we will explore them all. But first, is there someone whose energy intertwines with yours?'",
+    curiosityTeaser: "When you share their name, I can reveal the cosmic bond between your souls - the harmony, the friction, the destiny...",
   },
 
   collecting_other_info: {
@@ -165,6 +179,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'This is a collection phase - wait for user input',
     ],
     messageCount: 0,
+    steeringGuidance: "If off-topic, redirect with warmth: 'Their name carries an energy signature... Share it with me, and I'll show you how your paths intertwine.'",
+    curiosityTeaser: "Their name will reveal the first layer of your connection - what draws you together and what may push you apart...",
   },
 
   filler_relationship: {
@@ -185,6 +201,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'Make them reflect on what draws them to this person',
     ],
     messageCount: 1,
+    steeringGuidance: "Honor their response but guide back: 'Your thoughts reveal the depth of this connection... Tell me what you most want to understand about this bond.'",
+    curiosityTeaser: "What you share will help me reveal the hidden dynamics - the passion, the challenges, and the growth this relationship offers...",
   },
 
   collecting_other_dob: {
@@ -193,6 +211,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'This is a collection phase - wait for user input',
     ],
     messageCount: 0,
+    steeringGuidance: "If they don't know: 'Even a year alone carries truth. What do you remember of when they were born?'",
+    curiosityTeaser: "Their birth date combined with yours will reveal the cosmic bond between you - the compatibility, the friction, the destiny...",
   },
 
   filler_compatibility: {
@@ -223,6 +243,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'This is a collection phase - wait for user input',
     ],
     messageCount: 0,
+    steeringGuidance: "If off-topic, redirect with value: 'Your complete cosmic blueprint awaits... Where shall I send it? Your email keeps your reading safe.'",
+    curiosityTeaser: "Your full numerology report contains predictions, warnings, and hidden truths I haven't yet revealed...",
   },
 
   preparing_report: {
@@ -243,6 +265,8 @@ export const AI_PHASE_INSTRUCTIONS: Record<ConversationPhase, PhaseInstruction> 
       'Create desire for the complete reading',
     ],
     messageCount: 1,
+    steeringGuidance: "Honor their response but guide back: 'All will be revealed in your complete reading... But tell me, what aspect of your destiny calls to you most strongly?'",
+    curiosityTeaser: "Your answer will shape the final revelations I prepare for you - the warnings, the opportunities, the turning points ahead...",
   },
 
   paywall: {

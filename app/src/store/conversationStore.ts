@@ -77,6 +77,7 @@ export interface ConversationState {
   otherPerson: OtherPerson | null;
   compatibility: ReturnType<typeof calculateCompatibility> | null;
   isTyping: boolean;
+  isProcessing: boolean; // True from user submit until ALL Oracle responses complete
   hasPaid: boolean;
   paidTier: number | null;
   dynamicSuggestions: DynamicSuggestions;
@@ -95,6 +96,7 @@ export interface ConversationState {
   calculateUserNumbers: () => void;
   calculateCompatibilityScore: () => void;
   setTyping: (isTyping: boolean) => void;
+  setProcessing: (isProcessing: boolean) => void;
   setPaid: (tier: number) => void;
   setDynamicSuggestions: (suggestions: string[], oracleQuestion?: string) => void;
   clearDynamicSuggestions: () => void;
@@ -126,6 +128,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   otherPerson: null,
   compatibility: null,
   isTyping: false,
+  isProcessing: false,
   hasPaid: false,
   paidTier: null,
   dynamicSuggestions: initialDynamicSuggestions,
@@ -280,6 +283,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   setTyping: (isTyping) => set({ isTyping }),
 
+  setProcessing: (isProcessing) => set({ isProcessing }),
+
   setPaid: (tier) => set({ hasPaid: true, paidTier: tier }),
 
   setDynamicSuggestions: (suggestions, oracleQuestion) =>
@@ -306,6 +311,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       otherPerson: null,
       compatibility: null,
       isTyping: false,
+      isProcessing: false,
       hasPaid: false,
       paidTier: null,
       dynamicSuggestions: initialDynamicSuggestions,

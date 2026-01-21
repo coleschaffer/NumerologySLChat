@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { ConversationPhase } from '@/lib/phaseConfig';
 import { shouldShowSuggestions } from '@/lib/phaseConfig';
@@ -13,11 +14,59 @@ interface SuggestionCardsProps {
   dynamicSuggestions?: string[];
   /** Whether dynamic suggestions are loading */
   isLoading?: boolean;
+  /** Whether the cards should be disabled (e.g., during processing) */
+  disabled?: boolean;
 }
 
 // Note: Dynamic suggestions are always preferred
 // These are only used as absolute fallbacks when AI fails
 // The useDynamicSuggestions hook has contextual fallbacks that should be used first
+
+/**
+ * Inner component that handles click state
+ * Separate component so it remounts when suggestions change, resetting state
+ */
+function SuggestionButtonsInner({
+  suggestions,
+  onSelect,
+  disabled,
+  shouldReduceMotion,
+}: {
+  suggestions: string[];
+  onSelect: (suggestion: string) => void;
+  disabled?: boolean;
+  shouldReduceMotion: boolean | null;
+}) {
+  const [hasClicked, setHasClicked] = useState(false);
+
+  const isDisabled = disabled || hasClicked;
+
+  const handleClick = useCallback((suggestion: string) => {
+    if (isDisabled) return;
+    setHasClicked(true);
+    onSelect(suggestion);
+  }, [isDisabled, onSelect]);
+
+  return (
+    <>
+      {suggestions.map((suggestion, index) => (
+        <motion.button
+          key={suggestion}
+          initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.95 }}
+          animate={{ opacity: isDisabled ? 0.5 : 1, scale: 1 }}
+          transition={{ delay: shouldReduceMotion ? 0 : index * 0.08, ease: 'easeOut' }}
+          whileHover={shouldReduceMotion || isDisabled ? {} : { scale: 1.02, y: -2 }}
+          whileTap={isDisabled ? {} : { scale: 0.98 }}
+          onClick={() => handleClick(suggestion)}
+          disabled={isDisabled}
+          className={`px-4 py-2.5 rounded-full text-sm transition-all ${getButtonStyle(suggestion)} ${isDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
+        >
+          {suggestion}
+        </motion.button>
+      ))}
+    </>
+  );
+}
 
 export default function SuggestionCards({
   phase,
@@ -26,6 +75,7 @@ export default function SuggestionCards({
   otherPersonName,
   dynamicSuggestions,
   isLoading,
+  disabled,
 }: SuggestionCardsProps) {
   const shouldReduceMotion = useReducedMotion();
 
@@ -46,6 +96,9 @@ export default function SuggestionCards({
       .replace('[Name]', userName || 'them')
       .replace('[OtherName]', otherPersonName || 'them')
   );
+
+  // Create a stable key based on suggestions to reset click state when they change
+  const suggestionsKey = suggestions.join('|');
 
   return (
     <AnimatePresence mode="wait">
@@ -73,20 +126,14 @@ export default function SuggestionCards({
             ))}
           </>
         ) : (
-          processedSuggestions.map((suggestion, index) => (
-            <motion.button
-              key={suggestion}
-              initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: shouldReduceMotion ? 0 : index * 0.08, ease: 'easeOut' }}
-              whileHover={shouldReduceMotion ? {} : { scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onSelect(suggestion)}
-              className={`px-4 py-2.5 rounded-full text-sm transition-all ${getButtonStyle(suggestion)}`}
-            >
-              {suggestion}
-            </motion.button>
-          ))
+          // Use inner component with key to reset click state when suggestions change
+          <SuggestionButtonsInner
+            key={suggestionsKey}
+            suggestions={processedSuggestions}
+            onSelect={onSelect}
+            disabled={disabled}
+            shouldReduceMotion={shouldReduceMotion}
+          />
         )}
       </motion.div>
     </AnimatePresence>

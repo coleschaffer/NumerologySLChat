@@ -12,8 +12,9 @@ import {
   getLifePathCalculationSteps,
 } from '@/lib/numerology';
 import { parseDateString, isParseError, validateEmail, validateName, tryParseAsCorrection } from '@/lib/dateParser';
-import { getMysticalValidationMessages } from '@/lib/mysticalValidation';
+import { getMysticalValidationMessages, getErrorRecoveryMessages } from '@/lib/mysticalValidation';
 import { useDynamicSuggestions } from '@/hooks/useDynamicSuggestions';
+import { fetchWithTimeout, isTimeoutError } from '@/lib/fetchWithTimeout';
 import {
   useAIInterpretation,
   getAIAcknowledgment,
@@ -55,6 +56,7 @@ export default function ChatContainer() {
     otherPerson,
     compatibility,
     isTyping,
+    isProcessing,
     hasPaid,
     dynamicSuggestions,
     flowMode,
@@ -69,10 +71,12 @@ export default function ChatContainer() {
     calculateCompatibilityScore,
     setDynamicSuggestions,
     clearDynamicSuggestions,
+    setProcessing,
   } = useConversationStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
+  const lastSubmissionRef = useRef<number>(0); // For debouncing submissions
   const [activeVisualization, setActiveVisualization] = useState<'sacred-geometry' | 'compatibility' | null>(null);
 
   const { play: playSound, initialize: initializeAudio, toggleMute: toggleAmbientMute, isMuted: isAmbientMuted } = useSoundEffects();
@@ -114,34 +118,38 @@ export default function ChatContainer() {
         content: m.content,
       }));
 
-      const response = await fetch('/api/oracle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'conversation',
-          phase: targetPhase,
-          context: {
-            userName: state.userProfile.fullName,
-            lifePath: state.userProfile.lifePath,
-            expression: state.userProfile.expression,
-            soulUrge: state.userProfile.soulUrge,
-            personality: state.userProfile.personality,
-            birthdayNumber: state.userProfile.birthdayNumber,
-            otherPersonName: state.otherPerson?.name,
-            otherLifePath: state.otherPerson?.lifePath,
-            compatibilityScore: state.compatibility?.score,
-            compatibilityLevel: state.compatibility?.level,
-          },
-          baseMessages: [], // Not used for conversation mode
-          conversation: {
-            goal: instruction.goal,
-            guidelines: instruction.guidelines,
-            messageCount: instruction.messageCount,
-            userMessage,
-            history,
-          },
-        }),
-      });
+      const response = await fetchWithTimeout(
+        '/api/oracle',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'conversation',
+            phase: targetPhase,
+            context: {
+              userName: state.userProfile.fullName,
+              lifePath: state.userProfile.lifePath,
+              expression: state.userProfile.expression,
+              soulUrge: state.userProfile.soulUrge,
+              personality: state.userProfile.personality,
+              birthdayNumber: state.userProfile.birthdayNumber,
+              otherPersonName: state.otherPerson?.name,
+              otherLifePath: state.otherPerson?.lifePath,
+              compatibilityScore: state.compatibility?.score,
+              compatibilityLevel: state.compatibility?.level,
+            },
+            baseMessages: [], // Not used for conversation mode
+            conversation: {
+              goal: instruction.goal,
+              guidelines: instruction.guidelines,
+              messageCount: instruction.messageCount,
+              userMessage,
+              history,
+            },
+          }),
+        },
+        10000 // 10 second timeout for conversation messages - more complex generation
+      );
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -154,8 +162,12 @@ export default function ChatContainer() {
 
       throw new Error('No messages returned');
     } catch (error) {
-      console.error('[ChatContainer] AI conversation error, using fallback:', error);
-      return [];
+      if (isTimeoutError(error)) {
+        console.warn('[ChatContainer] Conversation request timed out');
+      } else {
+        console.error('[ChatContainer] AI conversation error, using fallback:', error);
+      }
+      return []; // Empty triggers fallback to templated messages
     }
   }, []);
 
@@ -227,16 +239,15 @@ export default function ChatContainer() {
         }
       } catch (error) {
         console.error('[ChatContainer] Error in handleValidationError:', error);
-        // Fallback: show simple redirect message without voiceover
-        const fallbackMessages = [
-          "I sense something isn't quite right...",
-          expectedInput === 'date' ? "When were you born? Share your birthday with me." :
-          expectedInput === 'name' ? "What is your full birth name?" :
-          expectedInput === 'email' ? "Where should I send your complete reading?" :
-          "Tell me more..."
-        ];
+        // Use mystical recovery messages with personalization
+        const recoveryMessages = getErrorRecoveryMessages(userProfile.fullName);
+        // Add redirect based on expected input
+        const redirect = expectedInput === 'date' ? "The numbers await—when were you born?" :
+          expectedInput === 'name' ? "What is the name spoken at your birth?" :
+          expectedInput === 'email' ? "Where shall I send your cosmic reading?" :
+          "What would you like to explore?";
         // Add messages directly without voiceover as last resort
-        for (const msg of fallbackMessages) {
+        for (const msg of [...recoveryMessages, redirect]) {
           addOracleMessageWithDuration(msg, msg.length * 50);
           await new Promise(resolve => setTimeout(resolve, 800));
         }
@@ -365,9 +376,28 @@ export default function ChatContainer() {
   // ============================================
   const handleUserInput = async (value: string) => {
     console.log('[ChatContainer] handleUserInput called with:', value, 'phase:', phase);
-    try {
+
+    // Debounce check - reject if less than 1 second since last submission
+    const now = Date.now();
+    if (now - lastSubmissionRef.current < 1000) {
+      console.log('[ChatContainer] Submission rejected - debounce period');
+      return;
+    }
+    lastSubmissionRef.current = now;
+
+    // Prevent submission if already processing
+    if (isProcessing) {
+      console.log('[ChatContainer] Submission rejected - already processing');
+      return;
+    }
+
     const trimmedValue = value.trim();
     if (!trimmedValue) return;
+
+    // Lock input immediately
+    setProcessing(true);
+
+    try {
 
     const validationType = getValidationType(phase);
 
@@ -506,9 +536,11 @@ export default function ChatContainer() {
       } catch (error) {
         console.error('[ChatContainer] Error in DOB handling:', error);
         setActiveVisualization(null);
+        // Use personalized mystical recovery
+        const recoveryMessages = getErrorRecoveryMessages(userProfile.fullName);
         await speakOracleMessages([
-          "I sense a disturbance in the connection...",
-          "Let us try again. When were you born?",
+          ...recoveryMessages,
+          "The numbers await—when were you born?",
         ]);
         setPhase('collecting_dob');
       }
@@ -1135,11 +1167,16 @@ export default function ChatContainer() {
     }
     } catch (error) {
       console.error('[ChatContainer] Unhandled error in handleUserInput:', error);
-      // Show a fallback message so the user isn't left hanging
-      addOracleMessageWithDuration(
-        "I sense a disturbance in our connection... Let us try again.",
-        2000
-      );
+      // Use personalized mystical recovery messages
+      const userName = useConversationStore.getState().userProfile.fullName;
+      const recoveryMessages = getErrorRecoveryMessages(userName);
+      for (const msg of recoveryMessages) {
+        addOracleMessageWithDuration(msg, msg.length * 50);
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+    } finally {
+      // Always unlock input when done
+      setProcessing(false);
     }
   };
 
@@ -1348,10 +1385,11 @@ export default function ChatContainer() {
         otherPersonName={otherPerson?.name}
         dynamicSuggestions={dynamicSuggestions.suggestions.length > 0 ? dynamicSuggestions.suggestions : aiSuggestions}
         isLoading={suggestionsLoading && dynamicSuggestions.suggestions.length === 0}
+        disabled={isTyping || isProcessing}
       />
 
       {/* Input area */}
-      <UserInput phase={phase} onSubmit={handleUserInput} disabled={isTyping} />
+      <UserInput phase={phase} onSubmit={handleUserInput} disabled={isTyping || isProcessing} />
 
       {/* Paywall modal */}
       {showPaywall && <PaywallModal isPersonalOnly={!otherPerson} />}
