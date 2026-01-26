@@ -27,7 +27,6 @@ import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import UserInput from './UserInput';
 import SuggestionCards from './SuggestionCards';
-import FlowModeToggle from './FlowModeToggle';
 import PaywallModal from '../Payment/PaywallModal';
 import { getPhaseInstruction } from '@/lib/aiPhaseInstructions';
 // CalculationAnimation no longer used - calculation shown as permanent message
@@ -1271,11 +1270,6 @@ export default function ChatContainer() {
           <p className="text-white/70 mb-8 leading-relaxed text-base md:text-lg">
             {currentCopy.subhead}
           </p>
-
-          {/* Flow Mode Toggle */}
-          <div className="mb-6">
-            <FlowModeToggle />
-          </div>
 
           <button
             onClick={handleBeginReading}
