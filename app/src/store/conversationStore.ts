@@ -132,7 +132,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   hasPaid: false,
   paidTier: null,
   dynamicSuggestions: initialDynamicSuggestions,
-  flowMode: 'templated',
+  flowMode: 'ai',
 
   addMessage: (message) => {
     const newMessage: Message = {
@@ -315,6 +315,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       hasPaid: false,
       paidTier: null,
       dynamicSuggestions: initialDynamicSuggestions,
-      flowMode: 'templated',
+      flowMode: 'ai',
     }),
 }));
